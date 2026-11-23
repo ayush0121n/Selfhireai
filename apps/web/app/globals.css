@@ -1,0 +1,93 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@font-face {
+  font-family: 'MaisonSalome';
+  src: url('/fonts/MaisonSalome.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  --background: #FEF5E7;
+  --foreground: #2D0E03;
+}
+
+@layer base {
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-size: 15px;
+    line-height: 1.63;
+    font-weight: 400;
+    margin: 0;
+    padding: 0;
+  }
+
+  /* Headings: Cormorant Garamond with strict sizing & tracking */
+  h1 {
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-size: 78px;
+    line-height: 1.05;
+    font-weight: 700;
+    letter-spacing: -1.5px;
+  }
+
+  @media (max-width: 768px) {
+    h1 {
+      font-size: 48px;
+      letter-spacing: -1px;
+    }
+  }
+
+  h2 {
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-size: 36px;
+    line-height: 1.2;
+    font-weight: 700;
+  }
+
+  h3 {
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-size: 18px;
+    line-height: 1.3;
+    font-weight: 500;
+  }
+
+  p {
+    font-family: 'Inter', sans-serif;
+    font-size: 15px;
+    line-height: 1.63;
+    font-weight: 400;
+  }
+}
+
+@layer components {
+  /* System Card: 12px radius, 20px padding, 0.8px border, subtle shadow */
+  .system-card {
+    border-radius: 12px;
+    padding: 20px;
+    border-width: 0.8px;
+    border-color: rgba(110, 37, 10, 0.15);
+    background-color: #FFFFFF;
+    box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.02);
+  }
+
+  /* System Button: 12px radius, 20px padding, subtle shadow */
+  .system-button {
+    border-radius: 12px;
+    padding: 12px 20px;
+    font-family: 'Inter', sans-serif;
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 1.63;
+  }
+
+  /* Brand Typography strictly Maison Salome */
+  .brand-logo {
+    font-family: 'MaisonSalome', Georgia, serif;
+  }
+}

@@ -1,0 +1,37 @@
+{
+  "user_id": "usr_ayush_01",
+  "full_name": "Ayush Narkhede",
+  "email": "ayush.narkhede@example.com",
+  "phone": "+91 98765 43210",
+  "location": "Pune, India",
+  "work_authorization": "Authorized",
+  "skills": ["Python", "JavaScript", "React", "Node.js", "SQL", "REST APIs", "Playwright"],
+  "cover_letter": "I am an enthusiastic Full Stack Engineer eager to contribute to TechCorp India's scalable web systems.",
+  "experience": [
+    {
+      "company": "NextGen Systems",
+      "title": "Software Engineer Intern",
+      "dates": "2023-01 to 2024-06",
+      "bullets": [
+        "Architected REST APIs handling 10,000 requests/minute with 99.9% uptime",
+        "Optimized database query latency by 42% using index tuning and Redis caching"
+      ]
+    }
+  ],
+  "evidence": [
+    {
+      "id": "ev_exp_01",
+      "user_id": "usr_ayush_01",
+      "field_path": "experience[0].bullets[0]",
+      "verified_claim": "Architected REST APIs handling 10,000 requests/minute with 99.9% uptime",
+      "metric_citation": "10,000 rpm / 99.9% uptime"
+    },
+    {
+      "id": "ev_exp_02",
+      "user_id": "usr_ayush_01",
+      "field_path": "experience[0].bullets[1]",
+      "verified_claim": "Optimized database query latency by 42% using index tuning and Redis caching",
+      "metric_citation": "42% latency reduction"
+    }
+  ]
+}

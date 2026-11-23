@@ -1,0 +1,21 @@
+{
+  "expo": {
+    "name": "SelfHire.ai",
+    "slug": "selfhire-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "backgroundColor": "#FEF5E7"
+    },
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#FEF5E7"
+      }
+    }
+  }
+}

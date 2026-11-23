@@ -1,0 +1,1 @@
+# SelfHire.ai Worker Package

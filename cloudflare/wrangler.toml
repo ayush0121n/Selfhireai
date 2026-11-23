@@ -1,0 +1,17 @@
+name = "selfhire-edge-proxy"
+main = "worker.js"
+compatibility_date = "2024-09-23"
+
+# Cloudflare R2 Bucket Binding
+[[r2_buckets]]
+binding = "RESUME_VAULT"
+bucket_name = "selfhire-vault"
+
+# Cloudflare Turnstile Environment
+[vars]
+TURNSTILE_SITE_KEY = "0x4AAAAAAABBBBBBBBBBBBB"
+ENVIRONMENT = "production"
+
+# Edge Caching & Security Headers
+[observability]
+enabled = true
