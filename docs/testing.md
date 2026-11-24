@@ -13,21 +13,21 @@ In strict compliance with `/superpowers` (plan & test first) and `/karpathy-anti
 
 ```
 tests/
-├── unit/                        # Fast, isolated unit tests (< 50ms)
+├── unit/                        # Fast, deterministic unit tests (70 passing in suite)
 │   ├── test_payload_hasher.py   # Canonical JSON serialization & SHA-256 consistency
-│   ├── test_fit_score.py        # 40% skills, 25% exp, 15% loc, 10% sal weighted formula
-│   └── test_unsupported_claims.py # Evidence linkage blocker verification
-├── security/                    # Security, auth & boundary tests
-│   ├── test_approval_gate.py    # Single-use atomicity, TTL expiry, replay attack defense
-│   ├── test_tenant_isolation.py # Supabase RLS verification (IDOR protection)
-│   └── test_prompt_injection.py # Defense against malicious JDs containing instructions
+│   ├── test_reactive_resume_adapter.py # JSON Resume v1.0 schema import & export validation
+│   ├── test_rendercv_careerops.py # RenderCV YAML compiler & CareerOps XYZ metric analyzer
+│   ├── test_fit_scorer.py       # 40% skills, 25% exp, 15% loc, 10% sal weighted formula
+│   ├── test_evidence_vault.py   # Evidence extraction & claim verification
+│   ├── test_cloudflare_r2.py    # Cloudflare R2 object storage integration
+│   ├── test_credentials_vault.py # AES-256-GCM local credential encryption
+│   ├── test_job_discovery.py    # Job discovery & multi-portal aggregation
+│   ├── test_greenhouse_adapter.py # Greenhouse ATS form mapping
+│   ├── test_workday_adapter.py  # Workday multi-step application traversal
+│   └── test_worker_runner.py    # Autonomous background worker lifecycle
 ├── fixtures/                    # Deterministic test data
-│   ├── sample_profiles.json     # Synthetic candidate profiles with evidence IDs
-│   ├── real_jds/                # Real-world JDs from Microsoft, Google, Startups
-│   └── mock_html/               # Local multi-step HTML application forms
-└── e2e/                         # Playwright end-to-end integration tests
-    ├── test_mock_form_flow.py   # Complete Vertical Slice: Profile -> Resume -> Form -> Receipt
-    └── test_pdf_ats_parse.py    # pdfplumber roundtrip text extraction verification
+│   ├── sample_profile.json      # Synthetic candidate profiles with evidence IDs
+│   └── sample_job.json          # Mock multi-portal jobs and career listings
 ```
 
 ---
