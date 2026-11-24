@@ -241,6 +241,36 @@ class EvidenceVaultManager:
             "evidence": claims
         }
 
+    def add_claim(
+        self,
+        user_id: str,
+        document_id: str,
+        claim_type: str,
+        title: str,
+        field_path: str,
+        raw_source_text: str,
+        is_verified: int = 1,
+        value_json: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Inserts a single verified claim directly into the evidence table."""
+        ev_id = f"ev_{claim_type[:3].lower()}_{uuid.uuid4().hex[:10]}"
+        now = datetime.now(timezone.utc).isoformat()
+        conn = self._get_connection()
+        cur = conn.cursor()
+        cur.execute("""
+            INSERT OR REPLACE INTO evidence (
+                id, evidence_id, user_id, document_id, field_path, claim_type,
+                title, value_json, raw_source_text, is_verified, verified_at, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            ev_id, ev_id, user_id, document_id, field_path,
+            claim_type, title, value_json or json.dumps({"claim": title}),
+            raw_source_text, is_verified, now, now
+        ))
+        conn.commit()
+        conn.close()
+        return {"id": ev_id, "evidence_id": ev_id, "title": title}
+
     def get_user_evidence(self, user_id: str = "usr_candidate_default") -> List[Dict[str, Any]]:
         """Retrieves verified claims from evidence table."""
         conn = self._get_connection()

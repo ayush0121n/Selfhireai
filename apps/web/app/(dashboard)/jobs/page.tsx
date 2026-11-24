@@ -1,10 +1,9 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import {
   Search,
-  Filter,
   Building2,
   MapPin,
   ExternalLink,
@@ -18,26 +17,51 @@ import {
   RefreshCw,
   Globe,
   Radio,
-  Layers,
   Briefcase,
-  ChevronRight
+  Copy,
+  Check,
+  X,
+  ClipboardList,
+  Filter,
+  CheckSquare,
+  Square,
+  Ban,
+  SlidersHorizontal,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8001";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+
+interface AvailablePortal {
+  name: string;
+  count: number;
+}
 
 export default function JobsPage() {
   const [activeTab, setActiveTab] = useState<"live" | "boards" | "companies">("live");
   const [liveJobs, setLiveJobs] = useState<any[]>([]);
+  const [totalLiveJobs, setTotalLiveJobs] = useState(0);
+  const [availablePortals, setAvailablePortals] = useState<AvailablePortal[]>([]);
   const [jobSources, setJobSources] = useState<any[]>([]);
   const [totalSources, setTotalSources] = useState(0);
   const [companies, setCompanies] = useState<any[]>([]);
   const [totalCompanies, setTotalCompanies] = useState(0);
+  const [profile, setProfile] = useState<any>(null);
 
-  // Filters & State
+  // Manual Application State
+  const [manualModalJob, setManualModalJob] = useState<any | null>(null);
+  const [appliedJobs, setAppliedJobs] = useState<Record<string, boolean>>({});
+  const [copiedField, setCopiedField] = useState<string | null>(null);
+
+  // Portal Filtering Controls
+  // filterMode: 'all' = no portal restriction, 'include' = only selected, 'exclude' = omit selected
+  const [portalFilterMode, setPortalFilterMode] = useState<"all" | "include" | "exclude">("all");
+  const [selectedPortals, setSelectedPortals] = useState<string[]>([]);
+  const [workModeFilter, setWorkModeFilter] = useState<string>("all");
   const [searchTerm, setSearchTerm] = useState("");
+
+  // Other Tabs State
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [atsFilter, setAtsFilter] = useState("all");
   const [isDiscovering, setIsDiscovering] = useState(false);
@@ -51,14 +75,52 @@ export default function JobsPage() {
     fetchLiveJobs();
     fetchJobSources();
     fetchCompanies();
+    fetchProfile();
   }, []);
+
+  // Re-fetch when live filter state changes
+  useEffect(() => {
+    fetchLiveJobs();
+  }, [portalFilterMode, selectedPortals, workModeFilter, searchTerm]);
+
+  const fetchProfile = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/profile`);
+      if (res.ok) {
+        const data = await res.json();
+        setProfile(data);
+      }
+    } catch (err) {
+      console.error("Could not fetch profile:", err);
+    }
+  };
 
   const fetchLiveJobs = async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/v1/jobs/live?limit=30`);
+      const params = new URLSearchParams();
+      params.append("limit", "100");
+
+      if (workModeFilter && workModeFilter !== "all") {
+        params.append("work_mode", workModeFilter);
+      }
+      if (searchTerm.trim()) {
+        params.append("search", searchTerm.trim());
+      }
+      if (portalFilterMode === "include" && selectedPortals.length > 0) {
+        params.append("include_portals", selectedPortals.join(","));
+      }
+      if (portalFilterMode === "exclude" && selectedPortals.length > 0) {
+        params.append("exclude_portals", selectedPortals.join(","));
+      }
+
+      const res = await fetch(`${API_BASE}/api/v1/jobs/live?${params.toString()}`);
       if (res.ok) {
         const data = await res.json();
         setLiveJobs(data.jobs || []);
+        setTotalLiveJobs(data.total || 0);
+        if (data.available_portals) {
+          setAvailablePortals(data.available_portals);
+        }
       }
     } catch (err) {
       console.error("Could not fetch live jobs:", err);
@@ -89,6 +151,46 @@ export default function JobsPage() {
     } catch (err) {
       console.error("Could not fetch companies:", err);
     }
+  };
+
+  // Portal Toggle Handlers
+  const togglePortal = (portalName: string) => {
+    if (portalFilterMode === "all") {
+      setPortalFilterMode("include");
+      setSelectedPortals([portalName]);
+      return;
+    }
+
+    if (selectedPortals.includes(portalName)) {
+      const next = selectedPortals.filter((p) => p !== portalName);
+      if (next.length === 0) {
+        setPortalFilterMode("all");
+      }
+      setSelectedPortals(next);
+    } else {
+      setSelectedPortals([...selectedPortals, portalName]);
+    }
+  };
+
+  const handleSelectAllPortals = () => {
+    setPortalFilterMode("all");
+    setSelectedPortals([]);
+  };
+
+  const handleSelectStartupAIOnly = () => {
+    setPortalFilterMode("include");
+    const target = ["Ashby", "YCombinator", "Wellfound", "RemoteOK"].filter((name) =>
+      availablePortals.some((p) => p.name === name)
+    );
+    setSelectedPortals(target);
+  };
+
+  const handleSelectEnterpriseATSOnly = () => {
+    setPortalFilterMode("include");
+    const target = ["Greenhouse", "Lever", "Workday", "Darwinbox", "Direct Career Page"].filter((name) =>
+      availablePortals.some((p) => p.name === name)
+    );
+    setSelectedPortals(target);
   };
 
   const handleRunDiscovery = async () => {
@@ -161,7 +263,42 @@ export default function JobsPage() {
     }
   };
 
-  // Filtered views
+  // Direct Manual Apply Handler
+  const handleDirectManualApply = async (job: any) => {
+    const targetUrl = job.canonical_url || "#";
+    if (targetUrl && targetUrl !== "#") {
+      window.open(targetUrl, "_blank", "noopener,noreferrer");
+    }
+
+    try {
+      await fetch(`${API_BASE}/api/v1/applications/manual`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          job_id: job.id,
+          company_name: job.company_name,
+          job_title: job.title || job.job_title,
+          canonical_url: targetUrl,
+        }),
+      });
+
+      setAppliedJobs((prev) => ({ ...prev, [job.id]: true }));
+      setStatusMsg({
+        type: "success",
+        text: `Official application form for "${job.title || job.job_title}" opened in a new tab and logged to your Application Tracker!`,
+      });
+    } catch (err) {
+      console.error("Could not log manual application:", err);
+    }
+  };
+
+  const copyToClipboard = (text: string, fieldName: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedField(fieldName);
+    setTimeout(() => setCopiedField(null), 2000);
+  };
+
+  // Filtered views for Other Tabs
   const filteredSources = jobSources.filter((s) => {
     const matchesSearch =
       (s.name || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -182,15 +319,15 @@ export default function JobsPage() {
   });
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 font-sans">
       {/* Top Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="font-display text-4xl md:text-5xl font-bold tracking-tight text-[#2D0E03]">
-            Job Discovery & Sources OS
+          <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-[#2D0E03]">
+            Job Discovery Across All Portals
           </h1>
-          <p className="text-sm text-[#2D0E03]/70 font-sans mt-1">
-            Zero-Mock Career Discovery: 1,379 Seeded Boards, 675 Verified Direct Employer Career Pages & Live ATS Ingestion.
+          <p className="text-sm text-[#6E5D53] mt-1">
+            Browse live vacancies from Greenhouse, Ashby, Lever, Workday, Darwinbox, YCombinator, Wellfound, and direct career pages.
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -213,91 +350,27 @@ export default function JobsPage() {
         </div>
       </div>
 
-      {/* Live Ingestion Card: Import Real Job Posting */}
-      <Card className="p-5 bg-white border-[0.8px] border-[#6E250A]/20">
-        <div className="flex items-center justify-between mb-1">
-          <h3 className="font-display text-xl font-bold text-[#2D0E03]">
-            Ingest Live Job Posting via URL
-          </h3>
-          <span className="text-[11px] font-mono text-[#B34A0E] flex items-center gap-1">
-            <ShieldCheck className="w-3.5 h-3.5" /> Policy Enforced
-          </span>
-        </div>
-        <p className="text-xs text-[#2D0E03]/70 mb-4 font-sans">
-          Paste any verified Greenhouse, Workday, Lever, Jobicy, or company career URL to extract requirements, compute candidate fit, and prepare a tailored package.
-        </p>
-
-        <form onSubmit={handleImportJob} className="grid grid-cols-1 md:grid-cols-4 gap-3">
-          <input
-            type="url"
-            placeholder="https://boards.greenhouse.io/company/jobs/12345"
-            value={importUrl}
-            onChange={(e) => setImportUrl(e.target.value)}
-            required
-            className="md:col-span-2 py-2 px-3 text-xs rounded-[10px] bg-[#FEF5E7]/60 border border-[#6E250A]/15 text-[#2D0E03] placeholder-[#2D0E03]/40 focus:outline-none focus:ring-1 focus:ring-[#B34A0E]"
-          />
-          <input
-            type="text"
-            placeholder="Company Name (optional)"
-            value={importCompany}
-            onChange={(e) => setImportCompany(e.target.value)}
-            className="py-2 px-3 text-xs rounded-[10px] bg-[#FEF5E7]/60 border border-[#6E250A]/15 text-[#2D0E03] placeholder-[#2D0E03]/40 focus:outline-none focus:ring-1 focus:ring-[#B34A0E]"
-          />
-          <Button
-            type="submit"
-            variant="primary"
-            size="sm"
-            disabled={isImporting}
-            className="text-xs gap-1.5"
-          >
-            <PlusCircle className="w-3.5 h-3.5" />
-            {isImporting ? "Verifying..." : "Ingest Live Posting"}
-          </Button>
-        </form>
-
-        {statusMsg && (
-          <div
-            className={`mt-3 p-2.5 rounded-[8px] border text-xs flex items-center gap-2 ${
-              statusMsg.type === "success"
-                ? "bg-emerald-50/80 border-emerald-500/20 text-emerald-900"
-                : statusMsg.type === "error"
-                ? "bg-rose-50/80 border-rose-500/20 text-rose-900"
-                : "bg-[#FEF5E7] border-[#6E250A]/15 text-[#2D0E03]"
-            }`}
-          >
-            {statusMsg.type === "success" ? (
-              <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
-            ) : statusMsg.type === "error" ? (
-              <AlertCircle className="w-4 h-4 text-rose-600 flex-shrink-0" />
-            ) : (
-              <RefreshCw className="w-4 h-4 text-[#B34A0E] animate-spin flex-shrink-0" />
-            )}
-            <span>{statusMsg.text}</span>
-          </div>
-        )}
-      </Card>
-
       {/* Main Navigation Tabs */}
-      <div className="flex border-b border-[#6E250A]/15 gap-2">
+      <div className="flex border-b border-[#E8DFD8] gap-2">
         <button
           onClick={() => setActiveTab("live")}
-          className={`pb-3 px-4 text-xs font-bold transition-all relative ${
+          className={`pb-3 px-4 text-xs font-semibold transition-all relative ${
             activeTab === "live"
               ? "text-[#B34A0E] border-b-2 border-[#B34A0E]"
-              : "text-[#2D0E03]/60 hover:text-[#2D0E03]"
+              : "text-[#6E5D53] hover:text-[#2D0E03]"
           }`}
         >
           <span className="flex items-center gap-1.5">
             <Radio className="w-3.5 h-3.5" />
-            Live Discovered Roles ({liveJobs.length})
+            Live Discovered Roles ({totalLiveJobs})
           </span>
         </button>
         <button
           onClick={() => setActiveTab("boards")}
-          className={`pb-3 px-4 text-xs font-bold transition-all relative ${
+          className={`pb-3 px-4 text-xs font-semibold transition-all relative ${
             activeTab === "boards"
               ? "text-[#B34A0E] border-b-2 border-[#B34A0E]"
-              : "text-[#2D0E03]/60 hover:text-[#2D0E03]"
+              : "text-[#6E5D53] hover:text-[#2D0E03]"
           }`}
         >
           <span className="flex items-center gap-1.5">
@@ -307,10 +380,10 @@ export default function JobsPage() {
         </button>
         <button
           onClick={() => setActiveTab("companies")}
-          className={`pb-3 px-4 text-xs font-bold transition-all relative ${
+          className={`pb-3 px-4 text-xs font-semibold transition-all relative ${
             activeTab === "companies"
               ? "text-[#B34A0E] border-b-2 border-[#B34A0E]"
-              : "text-[#2D0E03]/60 hover:text-[#2D0E03]"
+              : "text-[#6E5D53] hover:text-[#2D0E03]"
           }`}
         >
           <span className="flex items-center gap-1.5">
@@ -320,48 +393,340 @@ export default function JobsPage() {
         </button>
       </div>
 
-      {/* TAB 1: Live Discovered Roles */}
+      {/* TAB 1: Live Discovered Roles Across All Portals */}
       {activeTab === "live" && (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="font-display text-2xl font-bold text-[#2D0E03]">
-                Live Open Vacancies
-              </h3>
-              <p className="text-xs text-[#2D0E03]/70 font-sans">
-                Extracted directly from verified career feeds and scored against your profile using Hugging Face all-MiniLM-L6-v2 embeddings.
-              </p>
+        <div className="space-y-6">
+          {/* COMPREHENSIVE PORTAL FILTER PANEL */}
+          <Card className="p-5 bg-white border border-[#E8DFD8] space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#E8DFD8]">
+              <div className="flex items-center gap-2">
+                <SlidersHorizontal className="w-4 h-4 text-[#B34A0E]" />
+                <h3 className="text-sm font-bold text-[#2D0E03]">
+                  Source Portal Filters & Toggles
+                </h3>
+                <span className="text-xs text-[#6E5D53]">
+                  ({availablePortals.length} portal networks indexed)
+                </span>
+              </div>
+
+              {/* Mode Selector: Include vs Exclude */}
+              <div className="flex items-center gap-2 text-xs">
+                <span className="text-[#6E5D53]">Filter Mode:</span>
+                <button
+                  onClick={() => setPortalFilterMode("all")}
+                  className={`px-2.5 py-1 rounded-[8px] transition-colors ${
+                    portalFilterMode === "all"
+                      ? "bg-[#2D0E03] text-white font-medium"
+                      : "bg-[#FAF6F2] text-[#6E5D53] hover:text-[#2D0E03]"
+                  }`}
+                >
+                  All Portals
+                </button>
+                <button
+                  onClick={() => {
+                    setPortalFilterMode("include");
+                    if (selectedPortals.length === 0 && availablePortals.length > 0) {
+                      setSelectedPortals([availablePortals[0].name]);
+                    }
+                  }}
+                  className={`px-2.5 py-1 rounded-[8px] transition-colors ${
+                    portalFilterMode === "include"
+                      ? "bg-[#B34A0E] text-white font-medium"
+                      : "bg-[#FAF6F2] text-[#6E5D53] hover:text-[#2D0E03]"
+                  }`}
+                >
+                  Include Only
+                </button>
+                <button
+                  onClick={() => {
+                    setPortalFilterMode("exclude");
+                    if (selectedPortals.length === 0 && availablePortals.length > 0) {
+                      setSelectedPortals(["Workday"]);
+                    }
+                  }}
+                  className={`px-2.5 py-1 rounded-[8px] transition-colors ${
+                    portalFilterMode === "exclude"
+                      ? "bg-rose-700 text-white font-medium"
+                      : "bg-[#FAF6F2] text-[#6E5D53] hover:text-[#2D0E03]"
+                  }`}
+                >
+                  Exclude Selected
+                </button>
+              </div>
             </div>
-            <span className="text-xs font-mono text-[#2D0E03]/50">
-              Showing {liveJobs.length} active roles
+
+            {/* Portal Selection Chips */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-[#6E5D53]">
+                  {portalFilterMode === "all"
+                    ? "Showing roles from all portal networks. Click any portal to filter:"
+                    : portalFilterMode === "include"
+                    ? "Showing roles ONLY from checked portals:"
+                    : "Showing all roles EXCEPT checked portals (Excluded):"}
+                </span>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleSelectAllPortals}
+                    className="text-[11px] text-[#B34A0E] hover:underline"
+                  >
+                    Reset (All)
+                  </button>
+                  <span className="text-[#E8DFD8]">|</span>
+                  <button
+                    onClick={handleSelectStartupAIOnly}
+                    className="text-[11px] text-[#6E5D53] hover:text-[#2D0E03]"
+                  >
+                    Startups & AI
+                  </button>
+                  <span className="text-[#E8DFD8]">|</span>
+                  <button
+                    onClick={handleSelectEnterpriseATSOnly}
+                    className="text-[11px] text-[#6E5D53] hover:text-[#2D0E03]"
+                  >
+                    Enterprise ATS
+                  </button>
+                </div>
+              </div>
+
+              {/* Portal Chips Grid */}
+              <div className="flex flex-wrap gap-2 pt-1">
+                {availablePortals.map((p) => {
+                  const isSelected = selectedPortals.includes(p.name);
+                  const isEffectiveIncluded =
+                    portalFilterMode === "all" ||
+                    (portalFilterMode === "include" && isSelected) ||
+                    (portalFilterMode === "exclude" && !isSelected);
+
+                  return (
+                    <button
+                      key={p.name}
+                      onClick={() => togglePortal(p.name)}
+                      className={`text-xs px-3 py-1.5 rounded-[10px] border transition-all flex items-center gap-1.5 ${
+                        portalFilterMode === "all"
+                          ? "bg-[#FAF6F2] border-[#E8DFD8] text-[#2D0E03] hover:border-[#B34A0E]"
+                          : portalFilterMode === "include"
+                          ? isSelected
+                            ? "bg-[#B34A0E] border-[#B34A0E] text-white font-medium shadow-sm"
+                            : "bg-white border-[#E8DFD8] text-[#6E5D53] opacity-60 hover:opacity-100"
+                          : isSelected
+                          ? "bg-rose-50 border-rose-300 text-rose-800 line-through font-medium"
+                          : "bg-[#FAF6F2] border-[#E8DFD8] text-[#2D0E03] hover:border-[#B34A0E]"
+                      }`}
+                    >
+                      {portalFilterMode === "include" && isSelected && (
+                        <Check className="w-3.5 h-3.5" />
+                      )}
+                      {portalFilterMode === "exclude" && isSelected && (
+                        <Ban className="w-3.5 h-3.5 text-rose-600" />
+                      )}
+                      <span>{p.name}</span>
+                      <span
+                        className={`text-[10px] px-1.5 py-0.2 rounded-full ${
+                          portalFilterMode === "include" && isSelected
+                            ? "bg-white/20 text-white"
+                            : "bg-[#E8DFD8]/60 text-[#2D0E03]"
+                        }`}
+                      >
+                        {p.count}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Search and Work Mode Bar */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
+              <div className="sm:col-span-2 relative">
+                <Search className="w-4 h-4 text-[#6E5D53] absolute left-3 top-3" />
+                <input
+                  type="text"
+                  placeholder="Search across all roles by title, company, or tech keyword (e.g. Stripe, Next.js, Go)..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-9 pr-4 py-2 text-xs rounded-[10px] bg-[#FAF6F2] border border-[#E8DFD8] text-[#2D0E03] placeholder-[#6E5D53]/60 focus:outline-none focus:ring-1 focus:ring-[#B34A0E]"
+                />
+              </div>
+
+              {/* Work Mode Filter */}
+              <div className="flex items-center gap-1">
+                {["all", "remote", "hybrid", "onsite"].map((mode) => (
+                  <button
+                    key={mode}
+                    onClick={() => setWorkModeFilter(mode)}
+                    className={`flex-1 text-[11px] py-2 rounded-[10px] border capitalize transition-colors ${
+                      workModeFilter === mode
+                        ? "bg-[#2D0E03] border-[#2D0E03] text-white font-medium"
+                        : "bg-[#FAF6F2] border-[#E8DFD8] text-[#6E5D53] hover:text-[#2D0E03]"
+                    }`}
+                  >
+                    {mode === "all" ? "All Modes" : mode}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </Card>
+
+          {/* Ingest URL Card */}
+          <Card className="p-4 bg-white border border-[#E8DFD8]">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-semibold text-[#2D0E03]">
+                Ingest any custom job URL from any company portal:
+              </span>
+              <span className="text-[11px] text-[#B34A0E] flex items-center gap-1">
+                <ShieldCheck className="w-3.5 h-3.5" /> Instant ATS extractor
+              </span>
+            </div>
+            <form onSubmit={handleImportJob} className="grid grid-cols-1 md:grid-cols-4 gap-2">
+              <input
+                type="url"
+                placeholder="https://boards.greenhouse.io/company/jobs/12345"
+                value={importUrl}
+                onChange={(e) => setImportUrl(e.target.value)}
+                required
+                className="md:col-span-2 py-2 px-3 text-xs rounded-[10px] bg-[#FAF6F2] border border-[#E8DFD8] text-[#2D0E03] placeholder-[#6E5D53]/60 focus:outline-none focus:ring-1 focus:ring-[#B34A0E]"
+              />
+              <input
+                type="text"
+                placeholder="Company Name (optional)"
+                value={importCompany}
+                onChange={(e) => setImportCompany(e.target.value)}
+                className="py-2 px-3 text-xs rounded-[10px] bg-[#FAF6F2] border border-[#E8DFD8] text-[#2D0E03] placeholder-[#6E5D53]/60 focus:outline-none focus:ring-1 focus:ring-[#B34A0E]"
+              />
+              <Button
+                type="submit"
+                variant="primary"
+                size="sm"
+                disabled={isImporting}
+                className="text-xs gap-1.5"
+              >
+                <PlusCircle className="w-3.5 h-3.5" />
+                {isImporting ? "Verifying..." : "Ingest & Extract"}
+              </Button>
+            </form>
+          </Card>
+
+          {statusMsg && (
+            <div
+              className={`p-3 rounded-[10px] border text-xs flex items-center justify-between gap-2 ${
+                statusMsg.type === "success"
+                  ? "bg-emerald-50 border-emerald-200 text-emerald-900"
+                  : statusMsg.type === "error"
+                  ? "bg-rose-50 border-rose-200 text-rose-900"
+                  : "bg-[#FEF5E7] border-[#E8DFD8] text-[#2D0E03]"
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                {statusMsg.type === "success" ? (
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                ) : statusMsg.type === "error" ? (
+                  <AlertCircle className="w-4 h-4 text-rose-600 flex-shrink-0" />
+                ) : (
+                  <RefreshCw className="w-4 h-4 text-[#B34A0E] animate-spin flex-shrink-0" />
+                )}
+                <span>{statusMsg.text}</span>
+              </div>
+              <button
+                onClick={() => setStatusMsg(null)}
+                className="text-xs text-[#6E5D53] hover:text-[#2D0E03]"
+              >
+                ✕
+              </button>
+            </div>
+          )}
+
+          {/* Active Results Summary */}
+          <div className="flex items-center justify-between text-xs text-[#6E5D53] pt-1">
+            <span>
+              Showing <strong>{liveJobs.length}</strong> open vacancies across{" "}
+              {portalFilterMode === "all"
+                ? "all portals"
+                : portalFilterMode === "include"
+                ? `${selectedPortals.join(", ")}`
+                : `all portals excluding ${selectedPortals.join(", ")}`}
             </span>
+            {(portalFilterMode !== "all" || workModeFilter !== "all" || searchTerm) && (
+              <button
+                onClick={() => {
+                  setPortalFilterMode("all");
+                  setSelectedPortals([]);
+                  setWorkModeFilter("all");
+                  setSearchTerm("");
+                }}
+                className="text-[#B34A0E] hover:underline font-medium"
+              >
+                Clear all filters
+              </button>
+            )}
           </div>
 
+          {/* Jobs Grid */}
           {liveJobs.length === 0 ? (
-            <Card className="p-8 text-center bg-white border border-[#6E250A]/10">
-              <Briefcase className="w-10 h-10 text-[#B34A0E]/40 mx-auto mb-2" />
-              <h4 className="font-display text-lg font-bold text-[#2D0E03]">
-                No live roles discovered yet
+            <Card className="p-8 text-center bg-white border border-[#E8DFD8]">
+              <Briefcase className="w-10 h-10 text-[#B34A0E] mx-auto mb-2 opacity-60" />
+              <h4 className="text-lg font-bold text-[#2D0E03]">
+                No roles match your current portal or filter criteria
               </h4>
-              <p className="text-xs text-[#2D0E03]/60 mt-1 max-w-sm mx-auto">
-                Click &quot;Run Live Discovery&quot; above to scan verified feeds or paste a specific job URL in the ingestion box.
+              <p className="text-xs text-[#6E5D53] mt-1 max-w-sm mx-auto">
+                Try selecting different portals, resetting your search keyword, or running live discovery.
               </p>
+              <button
+                onClick={handleSelectAllPortals}
+                className="mt-3 px-4 py-2 bg-[#B34A0E] text-white text-xs font-medium rounded-[10px]"
+              >
+                Reset Portal Filters
+              </button>
             </Card>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {liveJobs.map((job) => {
                 const matchPct = job.overall_match_percentage ?? job.fit_score?.overall_match_percentage ?? 85;
                 const keywords = job.extracted_keywords || job.must_have_skills || [];
+                const isApplied = !!appliedJobs[job.id];
+                const portalName = job.source_name || "Official Portal";
+
                 return (
-                  <Card key={job.id} className="p-5 flex flex-col justify-between hover:shadow-md transition-shadow">
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <Badge variant="terracotta" className="text-[10px]">
-                          {job.source_name || "Verified Live Feed"}
-                        </Badge>
-                        <div className="flex items-center gap-1.5">
+                  <Card
+                    key={job.id}
+                    className="p-5 flex flex-col justify-between hover:shadow-md transition-shadow bg-white border border-[#E8DFD8]"
+                  >
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        {/* Portal Badge with Distinct Color Code */}
+                        <span
+                          className={`text-xs font-semibold px-2.5 py-1 rounded-[8px] border ${
+                            portalName === "Greenhouse"
+                              ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                              : portalName === "Ashby"
+                              ? "bg-purple-50 text-purple-800 border-purple-200"
+                              : portalName === "Lever"
+                              ? "bg-blue-50 text-blue-800 border-blue-200"
+                              : portalName === "Workday"
+                              ? "bg-amber-50 text-amber-800 border-amber-200"
+                              : portalName === "Darwinbox"
+                              ? "bg-orange-50 text-orange-800 border-orange-200"
+                              : portalName === "YCombinator"
+                              ? "bg-orange-100 text-orange-900 border-orange-300 font-bold"
+                              : portalName === "Wellfound"
+                              ? "bg-red-50 text-red-800 border-red-200"
+                              : portalName === "RemoteOK"
+                              ? "bg-teal-50 text-teal-800 border-teal-200"
+                              : "bg-[#FAF6F2] text-[#2D0E03] border-[#E8DFD8]"
+                          }`}
+                        >
+                          {portalName}
+                        </span>
+
+                        <div className="flex items-center gap-2">
+                          {isApplied && (
+                            <span className="text-[11px] font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-[6px] flex items-center gap-1">
+                              <CheckCircle2 className="w-3 h-3" /> Applied (Tracked)
+                            </span>
+                          )}
                           <span
-                            className={`text-[11px] font-mono font-bold px-2 py-0.5 rounded-full ${
+                            className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${
                               matchPct >= 80
                                 ? "bg-emerald-100 text-emerald-800"
                                 : matchPct >= 60
@@ -374,52 +739,84 @@ export default function JobsPage() {
                         </div>
                       </div>
 
-                      <h4 className="font-display text-xl font-bold text-[#2D0E03] line-clamp-1">
-                        {job.title || job.job_title}
-                      </h4>
-                      <div className="text-xs text-[#2D0E03]/70 font-medium mt-1 flex items-center gap-2">
-                        <span>{job.company_name}</span>
-                        <span>•</span>
-                        <span className="flex items-center gap-0.5">
-                          <MapPin className="w-3 h-3 text-[#B34A0E]" />
-                          {job.location_raw || job.location || "Remote"}
-                        </span>
-                        <span>•</span>
-                        <span className="font-mono text-[#B34A0E] text-[10px]">
-                          {job.work_mode || "REMOTE"}
-                        </span>
+                      <div>
+                        <h4 className="text-lg font-bold text-[#2D0E03] line-clamp-1">
+                          {job.title || job.job_title}
+                        </h4>
+                        <div className="text-xs text-[#6E5D53] font-medium mt-1 flex items-center gap-2 flex-wrap">
+                          <span className="font-semibold text-[#2D0E03]">{job.company_name}</span>
+                          <span>•</span>
+                          <span className="flex items-center gap-0.5">
+                            <MapPin className="w-3 h-3 text-[#B34A0E]" />
+                            {job.location_raw || job.location || "Remote"}
+                          </span>
+                          <span>•</span>
+                          <span className="text-[#B34A0E]">
+                            {job.work_mode || "REMOTE"}
+                          </span>
+                          {job.salary_raw && (
+                            <>
+                              <span>•</span>
+                              <span className="text-xs font-semibold text-[#2D0E03]">
+                                {job.salary_raw}
+                              </span>
+                            </>
+                          )}
+                        </div>
                       </div>
 
                       {job.match_explanation && (
-                        <p className="text-[11px] text-[#2D0E03]/80 italic mt-2.5 p-2 rounded bg-[#FEF5E7]/50 border border-[#6E250A]/10 font-sans">
+                        <p className="text-xs text-[#2D0E03] p-2.5 rounded-[8px] bg-[#FAF6F2] border border-[#E8DFD8]/60 leading-relaxed">
                           &quot;{job.match_explanation}&quot;
                         </p>
                       )}
 
-                      <div className="flex flex-wrap gap-1 mt-3">
-                        {keywords.slice(0, 6).map((k: string) => (
-                          <span
-                            key={k}
-                            className="text-[10px] px-2 py-0.5 rounded bg-[#FEF5E7] text-[#2D0E03]/80 font-mono border border-[#6E250A]/10"
-                          >
-                            {k}
-                          </span>
-                        ))}
-                      </div>
+                      {keywords.length > 0 && (
+                        <div className="flex flex-wrap gap-1 pt-1">
+                          {keywords.slice(0, 6).map((k: string) => (
+                            <span
+                              key={k}
+                              className="text-[10px] px-2 py-0.5 rounded bg-[#FAF6F2] text-[#2D0E03] border border-[#E8DFD8]"
+                            >
+                              {k}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </div>
 
-                    <div className="mt-4 pt-3 border-t border-[#6E250A]/10 flex items-center justify-between">
-                      <a href={job.canonical_url} target="_blank" rel="noopener noreferrer">
-                        <Button variant="ghost" size="sm" className="text-xs px-0 gap-1 text-[#2D0E03]/80 hover:text-[#B34A0E]">
-                          Source <ExternalLink className="w-3 h-3" />
-                        </Button>
-                      </a>
-                      <Link href={`/auto-apply?jobId=${job.id}`}>
-                        <Button variant="primary" size="sm" className="text-xs gap-1.5">
-                          <Send className="w-3.5 h-3.5" />
-                          Apply with Approval Gate
-                        </Button>
-                      </Link>
+                    {/* Action Area: Dedicated Manual Portal Apply + Auto-Apply */}
+                    <div className="mt-5 pt-3 border-t border-[#E8DFD8] flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        {/* Direct Manual Apply on Source Portal */}
+                        <button
+                          onClick={() => handleDirectManualApply(job)}
+                          className="px-3.5 py-2 rounded-[10px] bg-[#B34A0E] text-white text-xs font-medium hover:bg-[#8F3B0B] transition-colors inline-flex items-center gap-1.5 shadow-sm"
+                          title="Open official company job portal in new tab and mark application"
+                        >
+                          <span>Apply on {portalName} (Manual)</span>
+                          <ExternalLink className="w-3.5 h-3.5" />
+                        </button>
+
+                        {/* Open Manual Copy Kit Modal */}
+                        <button
+                          onClick={() => setManualModalJob(job)}
+                          className="p-2 rounded-[10px] bg-[#FAF6F2] border border-[#E8DFD8] text-[#2D0E03] hover:bg-[#F5ECE0] transition-colors text-xs font-medium inline-flex items-center gap-1"
+                          title="View copy-paste answers kit for this job"
+                        >
+                          <ClipboardList className="w-3.5 h-3.5 text-[#B34A0E]" />
+                          <span>Prep Kit</span>
+                        </button>
+                      </div>
+
+                      <div className="flex items-center gap-2 justify-end">
+                        <Link href={`/auto-apply?jobId=${job.id}`}>
+                          <Button variant="outline" size="sm" className="text-xs gap-1.5 py-2">
+                            <Send className="w-3 h-3 text-[#B34A0E]" />
+                            Auto-Fill with Gate
+                          </Button>
+                        </Link>
+                      </div>
                     </div>
                   </Card>
                 );
@@ -432,15 +829,15 @@ export default function JobsPage() {
       {/* TAB 2: Verified Job Boards */}
       {activeTab === "boards" && (
         <div className="space-y-4">
-          <Card className="p-4 flex flex-col md:flex-row gap-3 items-center justify-between">
+          <Card className="p-4 flex flex-col md:flex-row gap-3 items-center justify-between bg-white border border-[#E8DFD8]">
             <div className="relative w-full md:w-96">
-              <Search className="w-4 h-4 text-[#2D0E03]/40 absolute left-3 top-1/2 -translate-y-1/2" />
+              <Search className="w-4 h-4 text-[#6E5D53] absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
                 placeholder="Search boards (e.g. RemoteOK, AI, India, Data, DevOps)..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-9 pr-4 py-2 text-xs rounded-[10px] bg-[#FEF5E7]/50 border border-[#6E250A]/15 text-[#2D0E03] placeholder-[#2D0E03]/40 focus:outline-none focus:ring-1 focus:ring-[#B34A0E]"
+                className="w-full pl-9 pr-4 py-2 text-xs rounded-[10px] bg-[#FEF5E7]/50 border border-[#E8DFD8] text-[#2D0E03] placeholder-[#6E5D53]/60 focus:outline-none focus:ring-1 focus:ring-[#B34A0E]"
               />
             </div>
             <div className="flex flex-wrap gap-1.5 w-full md:w-auto">
@@ -448,10 +845,10 @@ export default function JobsPage() {
                 <button
                   key={cat}
                   onClick={() => setCategoryFilter(cat)}
-                  className={`text-[11px] px-2.5 py-1 rounded-full font-mono transition-colors ${
+                  className={`text-[11px] px-2.5 py-1 rounded-full transition-colors ${
                     categoryFilter === cat
                       ? "bg-[#B34A0E] text-white"
-                      : "bg-[#FEF5E7] text-[#2D0E03]/70 hover:bg-[#FEF5E7]/80"
+                      : "bg-[#FEF5E7] text-[#6E5D53] hover:text-[#2D0E03]"
                   }`}
                 >
                   {cat === "all" ? "All Categories" : cat}
@@ -460,45 +857,44 @@ export default function JobsPage() {
             </div>
           </Card>
 
-          <Card className="overflow-hidden">
-            <div className="p-4 px-6 border-b border-[#6E250A]/10 bg-[#FEF5E7]/50 flex items-center justify-between">
-              <span className="font-display text-lg font-bold text-[#2D0E03]">
-                Awesome Job Boards Catalog (README 1 Ingested)
+          <Card className="overflow-hidden bg-white border border-[#E8DFD8]">
+            <div className="p-4 px-6 border-b border-[#E8DFD8] bg-[#FAF6F2] flex items-center justify-between">
+              <span className="text-base font-bold text-[#2D0E03]">
+                Awesome Job Boards Catalog
               </span>
-              <span className="text-xs text-[#2D0E03]/60 font-mono">
+              <span className="text-xs text-[#6E5D53]">
                 Showing {filteredSources.length} of {totalSources}
               </span>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
-                <thead className="bg-[#FEF5E7] text-[#2D0E03]/60 uppercase text-[10px] font-bold border-b border-[#6E250A]/10">
+                <thead className="bg-[#FAF6F2] text-[#6E5D53] uppercase text-[10px] font-bold border-b border-[#E8DFD8]">
                   <tr>
                     <th className="py-3 px-6">Source Name</th>
+                    <th className="py-3 px-6">Domain</th>
                     <th className="py-3 px-6">Category</th>
                     <th className="py-3 px-6">Automation Mode</th>
                     <th className="py-3 px-6">Policy Status</th>
-                    <th className="py-3 px-6 text-right">Action</th>
+                    <th className="py-3 px-6 text-right">Direct Portal Action</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-[#6E250A]/10">
+                <tbody className="divide-y divide-[#E8DFD8]">
                   {filteredSources.slice(0, 50).map((s) => (
-                    <tr key={s.id} className="hover:bg-[#FEF5E7]/40 transition-colors">
+                    <tr key={s.id} className="hover:bg-[#FAF6F2]/60 transition-colors">
                       <td className="py-3 px-6 font-semibold text-[#2D0E03]">
                         {s.name}
-                        {s.description && (
-                          <div className="text-[10px] font-normal text-[#2D0E03]/60 line-clamp-1">
-                            {s.description}
-                          </div>
-                        )}
+                      </td>
+                      <td className="py-3 px-6 text-[#6E5D53]">
+                        {s.domain}
                       </td>
                       <td className="py-3 px-6">
-                        <span className="px-2 py-0.5 rounded bg-[#FEF5E7] border border-[#6E250A]/10 text-[10px] font-mono">
+                        <span className="px-2 py-0.5 rounded bg-[#FAF6F2] text-[#2D0E03] border border-[#E8DFD8] text-[10px]">
                           {s.category || "General"}
                         </span>
                       </td>
-                      <td className="py-3 px-6 font-mono text-[11px]">
+                      <td className="py-3 px-6">
                         <span
-                          className={`px-2 py-0.5 rounded ${
+                          className={`px-2 py-0.5 rounded text-[10px] ${
                             s.automation_mode === "API_FEED"
                               ? "bg-emerald-100 text-emerald-800"
                               : s.automation_mode === "EXTENSION_ASSIST"
@@ -526,9 +922,10 @@ export default function JobsPage() {
                           href={s.website_url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 text-[#B34A0E] hover:underline font-semibold text-[11px]"
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[8px] bg-[#B34A0E] text-white hover:bg-[#8F3B0B] font-medium text-[11px] transition-colors"
                         >
-                          Visit <ExternalLink className="w-3 h-3" />
+                          <span>Apply on Board</span>
+                          <ExternalLink className="w-3 h-3" />
                         </a>
                       </td>
                     </tr>
@@ -543,15 +940,15 @@ export default function JobsPage() {
       {/* TAB 3: Direct Employer Portals */}
       {activeTab === "companies" && (
         <div className="space-y-4">
-          <Card className="p-4 flex flex-col md:flex-row gap-3 items-center justify-between">
+          <Card className="p-4 flex flex-col md:flex-row gap-3 items-center justify-between bg-white border border-[#E8DFD8]">
             <div className="relative w-full md:w-96">
-              <Search className="w-4 h-4 text-[#2D0E03]/40 absolute left-3 top-1/2 -translate-y-1/2" />
+              <Search className="w-4 h-4 text-[#6E5D53] absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
                 placeholder="Search 675 companies (e.g. Razorpay, Swiggy, Apple, Google)..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-9 pr-4 py-2 text-xs rounded-[10px] bg-[#FEF5E7]/50 border border-[#6E250A]/15 text-[#2D0E03] placeholder-[#2D0E03]/40 focus:outline-none focus:ring-1 focus:ring-[#B34A0E]"
+                className="w-full pl-9 pr-4 py-2 text-xs rounded-[10px] bg-[#FEF5E7]/50 border border-[#E8DFD8] text-[#2D0E03] placeholder-[#6E5D53]/60 focus:outline-none focus:ring-1 focus:ring-[#B34A0E]"
               />
             </div>
             <div className="flex flex-wrap gap-1.5 w-full md:w-auto">
@@ -559,10 +956,10 @@ export default function JobsPage() {
                 <button
                   key={ats}
                   onClick={() => setAtsFilter(ats)}
-                  className={`text-[11px] px-2.5 py-1 rounded-full font-mono transition-colors ${
+                  className={`text-[11px] px-2.5 py-1 rounded-full transition-colors ${
                     atsFilter === ats
                       ? "bg-[#B34A0E] text-white"
-                      : "bg-[#FEF5E7] text-[#2D0E03]/70 hover:bg-[#FEF5E7]/80"
+                      : "bg-[#FEF5E7] text-[#6E5D53] hover:text-[#2D0E03]"
                   }`}
                 >
                   {ats}
@@ -571,38 +968,38 @@ export default function JobsPage() {
             </div>
           </Card>
 
-          <Card className="overflow-hidden">
-            <div className="p-4 px-6 border-b border-[#6E250A]/10 bg-[#FEF5E7]/50 flex items-center justify-between">
-              <span className="font-display text-lg font-bold text-[#2D0E03]">
+          <Card className="overflow-hidden bg-white border border-[#E8DFD8]">
+            <div className="p-4 px-6 border-b border-[#E8DFD8] bg-[#FAF6F2] flex items-center justify-between">
+              <span className="text-base font-bold text-[#2D0E03]">
                 Worldwide Direct Employer Registry (README Ingested A–Z)
               </span>
-              <span className="text-xs text-[#2D0E03]/60 font-mono">
+              <span className="text-xs text-[#6E5D53]">
                 Showing {filteredCompanies.length} of {totalCompanies}
               </span>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
-                <thead className="bg-[#FEF5E7] text-[#2D0E03]/60 uppercase text-[10px] font-bold border-b border-[#6E250A]/10">
+                <thead className="bg-[#FAF6F2] text-[#6E5D53] uppercase text-[10px] font-bold border-b border-[#E8DFD8]">
                   <tr>
                     <th className="py-3 px-6">Company</th>
                     <th className="py-3 px-6">Detected ATS Platform</th>
                     <th className="py-3 px-6">Adapter Mode</th>
                     <th className="py-3 px-6">Policy Status</th>
-                    <th className="py-3 px-6 text-right">Direct Career Page</th>
+                    <th className="py-3 px-6 text-right">Direct Career Portal Action</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-[#6E250A]/10">
+                <tbody className="divide-y divide-[#E8DFD8]">
                   {filteredCompanies.slice(0, 50).map((c) => (
-                    <tr key={c.id} className="hover:bg-[#FEF5E7]/40 transition-colors">
+                    <tr key={c.id} className="hover:bg-[#FAF6F2]/60 transition-colors">
                       <td className="py-3 px-6 font-semibold text-[#2D0E03]">
                         {c.company_name}
                       </td>
                       <td className="py-3 px-6">
-                        <span className="px-2 py-0.5 rounded bg-[#FEF5E7] border border-[#6E250A]/10 text-[10px] font-mono text-[#B34A0E] font-bold">
+                        <span className="px-2 py-0.5 rounded bg-[#FAF6F2] border border-[#E8DFD8] text-[10px] text-[#B34A0E] font-medium">
                           {c.ats_platform || "Direct Career Portal"}
                         </span>
                       </td>
-                      <td className="py-3 px-6 font-mono text-[11px]">
+                      <td className="py-3 px-6 text-[#6E5D53]">
                         {c.automation_mode}
                       </td>
                       <td className="py-3 px-6">
@@ -616,9 +1013,10 @@ export default function JobsPage() {
                           href={c.career_url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 text-[#B34A0E] hover:underline font-semibold text-[11px]"
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[8px] bg-[#B34A0E] text-white hover:bg-[#8F3B0B] font-medium text-[11px] transition-colors"
                         >
-                          Careers <ExternalLink className="w-3 h-3" />
+                          <span>Apply Directly</span>
+                          <ExternalLink className="w-3 h-3" />
                         </a>
                       </td>
                     </tr>
@@ -627,6 +1025,127 @@ export default function JobsPage() {
               </table>
             </div>
           </Card>
+        </div>
+      )}
+
+      {/* Manual Application Helper Modal */}
+      {manualModalJob && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
+          <div className="bg-white rounded-[16px] max-w-xl w-full p-6 space-y-5 border border-[#E8DFD8] shadow-lg">
+            <div className="flex items-center justify-between pb-3 border-b border-[#E8DFD8]">
+              <div>
+                <h3 className="text-lg font-bold text-[#2D0E03]">
+                  Manual Application Assistant
+                </h3>
+                <p className="text-xs text-[#6E5D53]">
+                  {manualModalJob.company_name} — {manualModalJob.title || manualModalJob.job_title} ({manualModalJob.source_name || "Official Portal"})
+                </p>
+              </div>
+              <button
+                onClick={() => setManualModalJob(null)}
+                className="p-1 rounded-full text-[#6E5D53] hover:text-[#2D0E03] hover:bg-[#FAF6F2]"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <p className="text-[#6E5D53] leading-relaxed">
+                Click any prepared field below to copy it instantly into your clipboard, then open the official form on the employer&apos;s portal.
+              </p>
+
+              {/* Applicant Profile Quick-Copy Fields */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div
+                  onClick={() => copyToClipboard(profile?.full_name || "Ayush Sharma", "Name")}
+                  className="p-3 bg-[#FAF6F2] rounded-[10px] border border-[#E8DFD8] cursor-pointer hover:border-[#B34A0E] transition-colors flex items-center justify-between"
+                >
+                  <div>
+                    <span className="text-[#6E5D53] block text-[10px]">Full Name</span>
+                    <span className="font-semibold text-[#2D0E03]">{profile?.full_name || "Ayush Sharma"}</span>
+                  </div>
+                  {copiedField === "Name" ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4 text-[#6E5D53]" />}
+                </div>
+
+                <div
+                  onClick={() => copyToClipboard(profile?.email || "ayush.sharma@example.com", "Email")}
+                  className="p-3 bg-[#FAF6F2] rounded-[10px] border border-[#E8DFD8] cursor-pointer hover:border-[#B34A0E] transition-colors flex items-center justify-between"
+                >
+                  <div>
+                    <span className="text-[#6E5D53] block text-[10px]">Email</span>
+                    <span className="font-semibold text-[#2D0E03] truncate">{profile?.email || "ayush.sharma@example.com"}</span>
+                  </div>
+                  {copiedField === "Email" ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4 text-[#6E5D53]" />}
+                </div>
+
+                <div
+                  onClick={() => copyToClipboard(profile?.phone || "+1 (555) 234-5678", "Phone")}
+                  className="p-3 bg-[#FAF6F2] rounded-[10px] border border-[#E8DFD8] cursor-pointer hover:border-[#B34A0E] transition-colors flex items-center justify-between"
+                >
+                  <div>
+                    <span className="text-[#6E5D53] block text-[10px]">Phone</span>
+                    <span className="font-semibold text-[#2D0E03]">{profile?.phone || "+1 (555) 234-5678"}</span>
+                  </div>
+                  {copiedField === "Phone" ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4 text-[#6E5D53]" />}
+                </div>
+
+                <div
+                  onClick={() => copyToClipboard(profile?.linkedin_url || "https://linkedin.com/in/ayush-sharma", "LinkedIn")}
+                  className="p-3 bg-[#FAF6F2] rounded-[10px] border border-[#E8DFD8] cursor-pointer hover:border-[#B34A0E] transition-colors flex items-center justify-between"
+                >
+                  <div>
+                    <span className="text-[#6E5D53] block text-[10px]">LinkedIn URL</span>
+                    <span className="font-semibold text-[#2D0E03] truncate">{profile?.linkedin_url || "https://linkedin.com/in/ayush-sharma"}</span>
+                  </div>
+                  {copiedField === "LinkedIn" ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4 text-[#6E5D53]" />}
+                </div>
+              </div>
+
+              {/* Tailored Cover Pitch */}
+              <div
+                onClick={() => {
+                  const pitch = `Hello ${manualModalJob.company_name} Hiring Team,\n\nI am applying for the ${manualModalJob.title || manualModalJob.job_title} role. With hands-on experience in ${(manualModalJob.extracted_keywords || ["high-scale engineering"]).slice(0, 3).join(", ")}, I have built reliable distributed systems and delivered measurable performance improvements verified in my work history.\n\nThank you for your consideration.\n${profile?.full_name || "Ayush Sharma"}`;
+                  copyToClipboard(pitch, "Pitch");
+                }}
+                className="p-3 bg-[#FAF6F2] rounded-[10px] border border-[#E8DFD8] cursor-pointer hover:border-[#B34A0E] transition-colors space-y-1.5"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-[#6E5D53] text-[10px] font-semibold">Tailored Elevator Pitch / Cover Note (Click to copy)</span>
+                  {copiedField === "Pitch" ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4 text-[#6E5D53]" />}
+                </div>
+                <p className="text-[#2D0E03] text-xs leading-relaxed">
+                  &quot;Hello {manualModalJob.company_name} Hiring Team, I am applying for the ${manualModalJob.title || manualModalJob.job_title} role. With hands-on experience in ${(manualModalJob.extracted_keywords || ["high-scale engineering"]).slice(0, 3).join(", ")}, I have built reliable systems with verified evidence metrics...&quot;
+                </p>
+              </div>
+            </div>
+
+            {/* Modal Actions */}
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-[#E8DFD8]">
+              <a
+                href={manualModalJob.canonical_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => handleDirectManualApply(manualModalJob)}
+                className="w-full sm:w-auto px-5 py-2.5 rounded-[10px] bg-[#B34A0E] text-white text-xs font-medium hover:bg-[#8F3B0B] transition-colors inline-flex items-center justify-center gap-1.5 shadow-sm"
+              >
+                <span>Open Application Form on {manualModalJob.source_name || "Portal"}</span>
+                <ExternalLink className="w-3.5 h-3.5" />
+              </a>
+
+              <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                <button
+                  onClick={() => {
+                    handleDirectManualApply(manualModalJob);
+                    setManualModalJob(null);
+                  }}
+                  className="w-full sm:w-auto px-4 py-2.5 rounded-[10px] bg-white border border-[#E8DFD8] text-[#2D0E03] text-xs font-medium hover:bg-[#FAF6F2] transition-colors inline-flex items-center justify-center gap-1.5"
+                >
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>I&apos;ve Applied (Save to Tracker)</span>
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>

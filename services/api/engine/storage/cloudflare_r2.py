@@ -27,11 +27,11 @@ class CloudflareManager:
         r2_bucket_name: Optional[str] = None,
         turnstile_secret_key: Optional[str] = None
     ):
-        self.account_id = account_id or os.getenv("CLOUDFLARE_ACCOUNT_ID", "")
+        self.account_id = account_id or os.getenv("CLOUDFLARE_ACCOUNT_ID", "mock_cf_acc_12345")
         self.bucket_name = r2_bucket_name or os.getenv("CLOUDFLARE_R2_BUCKET_NAME", "selfhire-vault")
         self.public_domain = os.getenv("CLOUDFLARE_R2_PUBLIC_DOMAIN", "https://cdn.selfhire.ai")
-        self.access_key_id = os.getenv("CLOUDFLARE_R2_ACCESS_KEY_ID", "")
-        self.secret_access_key = os.getenv("CLOUDFLARE_R2_SECRET_ACCESS_KEY", "")
+        self.access_key_id = os.getenv("CLOUDFLARE_R2_ACCESS_KEY_ID", "mock_r2_key_abc")
+        self.secret_access_key = os.getenv("CLOUDFLARE_R2_SECRET_ACCESS_KEY", "mock_r2_secret_xyz")
         self.turnstile_secret = turnstile_secret_key or os.getenv(
             "CLOUDFLARE_TURNSTILE_SECRET_KEY", "1x0000000000000000000000000000000AA"
         )

@@ -51,8 +51,11 @@ playwright/.cache/
 data/*.db
 data/*.sqlite
 data/*.sqlite3
+data/*.enc
 data/vault/*.enc
+data/uploads/
 data/debug/
+*.tsbuildinfo
 
 # OS specific
 .DS_Store

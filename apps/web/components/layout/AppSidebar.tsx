@@ -25,6 +25,7 @@ import {
   Building2,
   CheckCircle2,
   Globe,
+  LogOut,
 } from "lucide-react";
 import { cn } from "../ui/button";
 
@@ -177,13 +178,27 @@ export function AppSidebar() {
             <div className="text-[10px] text-[#2D0E03]/60">Candidate (Pro)</div>
           </div>
         </div>
-        <Link
-          href="/settings/security"
-          className="p-1.5 text-[#2D0E03]/60 hover:text-[#B34A0E] transition-colors"
-          title="Settings"
-        >
-          <Settings className="w-4 h-4" />
-        </Link>
+        <div className="flex items-center gap-1">
+          <Link
+            href="/settings/security"
+            className="p-1.5 text-[#2D0E03]/60 hover:text-[#B34A0E] transition-colors"
+            title="Settings"
+          >
+            <Settings className="w-4 h-4" />
+          </Link>
+          <button
+            type="button"
+            onClick={() => {
+              localStorage.removeItem("selfhire_auth_role");
+              localStorage.removeItem("selfhire_auth_email");
+              window.location.href = "/login";
+            }}
+            className="p-1.5 text-[#2D0E03]/60 hover:text-red-600 transition-colors"
+            title="Sign Out"
+          >
+            <LogOut className="w-4 h-4" />
+          </button>
+        </div>
       </div>
     </aside>
   );

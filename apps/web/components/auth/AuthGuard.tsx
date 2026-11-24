@@ -9,19 +9,22 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
 
   useEffect(() => {
-    // Check local session state
-    const authRole = localStorage.getItem("selfhire_auth_role");
-    const authEmail = localStorage.getItem("selfhire_auth_email");
+    if (typeof window !== "undefined") {
+      const authRole = localStorage.getItem("selfhire_auth_role");
+      const authEmail = localStorage.getItem("selfhire_auth_email");
 
-    if (!authRole || !authEmail) {
-      setIsAuthenticated(false);
-      router.replace(`/login?redirect=${encodeURIComponent(pathname)}`);
-    } else {
-      setIsAuthenticated(true);
+      // Without login, no access: redirect immediately to login page
+      if (!authRole || !authEmail) {
+        setIsAuthenticated(false);
+        const redirectParam = pathname && pathname !== "/" ? `?redirect=${encodeURIComponent(pathname)}` : "";
+        router.replace(`/login${redirectParam}`);
+      } else {
+        setIsAuthenticated(true);
+      }
     }
   }, [pathname, router]);
 
-  // While checking auth, show an elegant warm loading skeleton
+  // While verifying authentication state, display warm branded loading screen
   if (isAuthenticated === null) {
     return (
       <div className="min-h-screen bg-[#FEF5E7] flex flex-col items-center justify-center space-y-4">
@@ -33,8 +36,9 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
     );
   }
 
+  // Not authenticated: render nothing while redirecting
   if (!isAuthenticated) {
-    return null; // Will redirect in useEffect
+    return null;
   }
 
   return <>{children}</>;

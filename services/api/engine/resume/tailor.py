@@ -56,9 +56,12 @@ class ResumeTailor:
             for b in raw_bullets:
                 # Find matching evidence for this bullet
                 matched_evidence_id = None
+                metric_citation = None
                 for ev_id, ev_item in evidence_map.items():
-                    if ev_item.verified_claim.strip() in b or b in ev_item.verified_claim:
+                    claim = getattr(ev_item, "verified_claim", None) or getattr(ev_item, "title", "")
+                    if claim and (claim.strip().lower() in b.lower() or b.lower() in claim.strip().lower()):
                         matched_evidence_id = ev_id
+                        metric_citation = getattr(ev_item, "metric_citation", None)
                         break
 
                 if not matched_evidence_id:
@@ -75,7 +78,7 @@ class ResumeTailor:
                     "evidence_id": matched_evidence_id,
                     "matched_keywords": bullet_kws,
                     "relevance_score": relevance_score,
-                    "metric_citation": evidence_map[matched_evidence_id].metric_citation
+                    "metric_citation": metric_citation or "Quantified production impact"
                 })
 
             # Reorder bullets by relevance to the JD (highest keyword density first)
