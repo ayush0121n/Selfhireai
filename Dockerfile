@@ -10,6 +10,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
+ENV PYTHONPATH=/app
+ENV PORT=8000
+
 # Copy requirements and install
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
@@ -19,6 +22,7 @@ COPY packages/ ./packages/
 COPY services/ ./services/
 COPY adapters/ ./adapters/
 COPY data/ ./data/
+COPY scripts/ ./scripts/
 COPY tests/fixtures/ ./tests/fixtures/
 
 # Ensure data directories exist

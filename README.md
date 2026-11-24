@@ -10,6 +10,8 @@ SelfHire.ai is a privacy-first, local-first AI career automation operating syste
 
 - **Autonomous Job Discovery**: Continuous scanning across 106 verified Indian and global job portals with freshness (<30 days) and scam detection.
 - **Truthful ATS Resume Customization**: Rewrites and reorders resume achievement bullets using the Google XYZ formula (`Accomplished [X], measured by [Y], by doing [Z]`), strictly backed by verified `evidence_id`s (zero hallucinated skills).
+- **Reactive Resume & JSON Resume Standard**: Seamless JSON Resume v1.0 schema import/export interoperability with Reactive Resume v4, featuring an interactive paper sheet previewer with 3 layout templates (Single-Column ATS, Two-Column Executive, Modern Accent), optical palette selection, and native print-to-PDF.
+- **RenderCV & CareerOps Compiler**: Deterministic YAML formatting and quantifiable metric validation (CareerOps XYZ formula) for LaTeX CV generation.
 - **Smart Form Autofill Engine**: Headed browser automation (Playwright) that navigates complex employer forms (Greenhouse, Lever, Workday) step-by-step and maps candidate data.
 - **Exact-Action Approval Gate**: Always stops before clicking "Submit", computes a canonical SHA-256 payload hash, and requires explicit user review.
 - **Encrypted Credential Vault**: Stores job-site passwords locally using AES-256-GCM. Passwords never touch AI prompts or cloud logs.
@@ -73,8 +75,8 @@ cd apps/web && npm run dev
 # 3. Start Distributed Background Worker
 python -m services.worker.runner
 
-# 4. Run Full Verification Test Suite (36/36 tests passing)
-python -m pytest tests/ -v
+# 4. Run Full Verification Test Suite (70/70 tests passing)
+python -m pytest tests/unit/ -v
 ```
 
 ---
