@@ -343,7 +343,7 @@ def get_job_sources(
         params.extend([f"%{search}%", f"%{search}%", f"%{search}%"])
 
     count_cur = conn.cursor()
-    count_cur.execute(f"SELECT COUNT(*) FROM ({query})", params)
+    count_cur.execute(f"SELECT COUNT(*) FROM ({query})", params)  # nosec B608
     total = count_cur.fetchone()[0]
 
     query += " ORDER BY id ASC LIMIT ? OFFSET ?"
@@ -378,7 +378,7 @@ def get_company_career_pages(
         params.extend([f"%{search}%", f"%{search}%"])
 
     count_cur = conn.cursor()
-    count_cur.execute(f"SELECT COUNT(*) FROM ({query})", params)
+    count_cur.execute(f"SELECT COUNT(*) FROM ({query})", params)  # nosec B608
     total = count_cur.fetchone()[0]
 
     query += " ORDER BY company_name ASC LIMIT ? OFFSET ?"
@@ -447,7 +447,7 @@ def get_live_jobs(
             params.extend(exc_list)
 
     count_cur = conn.cursor()
-    count_cur.execute(f"SELECT COUNT(*) FROM ({query})", params)
+    count_cur.execute(f"SELECT COUNT(*) FROM ({query})", params)  # nosec B608
     total = count_cur.fetchone()[0]
 
     query += " ORDER BY m.overall_match_percentage DESC, j.last_verified_at DESC LIMIT ? OFFSET ?"

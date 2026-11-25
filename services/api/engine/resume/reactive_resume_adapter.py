@@ -193,7 +193,7 @@ class ReactiveResumeAdapter:
             })
 
             for b_idx, b in enumerate(bullets):
-                ev_id = f"ev_rx_{idx}_{b_idx}_{hashlib.md5(b.encode()).hexdigest()[:6]}"
+                ev_id = f"ev_rx_{idx}_{b_idx}_{hashlib.sha256(b.encode()).hexdigest()[:6]}"
                 evidence_items.append(
                     EvidenceItem(
                         id=ev_id,
