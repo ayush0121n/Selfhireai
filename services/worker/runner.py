@@ -194,3 +194,17 @@ class TaskRunner:
             "channel": "EMAIL",
             "draft_ready": True
         }
+
+
+if __name__ == "__main__":
+    import time
+    runner = TaskRunner()
+    print(f"[SelfHire.ai Worker {runner.worker_id} Online] Polling background task queue...")
+    try:
+        while True:
+            res = runner.run_once()
+            if res:
+                print(f"[{datetime.now().strftime('%X')}] Processed task: {res}")
+            time.sleep(2)
+    except KeyboardInterrupt:
+        print("[Worker Stopped]")
