@@ -537,7 +537,7 @@ export default function SocialPortalHub() {
                 </label>
                 <input
                   type="text"
-                  placeholder="e.g. ayush_narkhede"
+                  placeholder="e.g. alex_rivera"
                   value={inputHandle}
                   onChange={(e) => setInputHandle(e.target.value)}
                   className="w-full px-3 py-2 rounded-[8px] bg-[#FEF5E7] border border-[#6E250A]/15 text-text-primary placeholder:text-text-primary/40 focus:outline-none focus:ring-1 focus:ring-accent-primary"

@@ -14,9 +14,9 @@ from services.api.engine.discovery.portal_selectors import get_portal_selectors,
 @pytest.fixture
 def sample_candidate():
     return CandidateProfile(
-        user_id="usr_ayush_01",
-        full_name="Ayush Narkhede",
-        email="ayush.narkhede@example.com",
+        user_id="usr_demo_01",
+        full_name="Alex Rivera",
+        email="alex.rivera@example.com",
         phone="+91 98765 43210",
         location="Pune, India",
         work_authorization="Authorized",
@@ -35,14 +35,14 @@ def sample_candidate():
         evidence=[
             EvidenceItem(
                 id="ev_exp_01",
-                user_id="usr_ayush_01",
+                user_id="usr_demo_01",
                 field_path="experience[0].bullets[0]",
                 verified_claim="Architected REST APIs handling 10,000 requests/minute with 99.9% uptime",
                 metric_citation="10,000 requests/minute and 99.9% uptime"
             ),
             EvidenceItem(
                 id="ev_exp_02",
-                user_id="usr_ayush_01",
+                user_id="usr_demo_01",
                 field_path="experience[0].bullets[1]",
                 verified_claim="Optimized database query latency by 42% using index tuning and Redis caching",
                 metric_citation="42% latency reduction"
@@ -72,7 +72,7 @@ def test_rendercv_yaml_generation(sample_candidate, sample_job):
     yaml_output = RenderCVCompiler.compile_yaml(sample_candidate, tailored, theme="engineeringresumes")
 
     assert "cv:" in yaml_output
-    assert "name: Ayush Narkhede" in yaml_output
+    assert "name: Alex Rivera" in yaml_output
     assert "theme: engineeringresumes" in yaml_output
     assert "10,000 requests/minute" in yaml_output
     assert "42%" in yaml_output
@@ -87,7 +87,7 @@ def test_latex_and_typst_compilation(sample_candidate, sample_job):
     assert r"\documentclass[11pt,a4paper,sans]{moderncv}" in latex_output
     assert r"\moderncvstyle{banking}" in latex_output
     assert "#set page(paper: \"us-letter\"" in typst_output
-    assert "Ayush Narkhede" in typst_output
+    assert "Alex Rivera" in typst_output
 
 
 def test_career_ops_xyz_formula_evaluation(sample_candidate):

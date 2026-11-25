@@ -143,9 +143,9 @@ export default function OnboardingPage() {
     setLoading(true);
 
     const profileData = {
-      user_id: "usr_ayush_01",
-      full_name: "Ayush Narkhede",
-      email: typeof window !== "undefined" ? localStorage.getItem("selfhire_auth_email") || "ayush@example.com" : "ayush@example.com",
+      user_id: "usr_demo_01",
+      full_name: "Alex Rivera",
+      email: typeof window !== "undefined" ? localStorage.getItem("selfhire_auth_email") || "alex.rivera@example.com" : "alex.rivera@example.com",
       phone: "+91 98765 43210",
       location: preferredLocations[0] || "Pune, India",
       work_authorization: "Authorized",

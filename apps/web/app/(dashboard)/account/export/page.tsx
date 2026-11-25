@@ -28,6 +28,7 @@ export default function AccountExportPage() {
   const [loading, setLoading] = useState(true);
   const [purgeStatus, setPurgeStatus] = useState<string | null>(null);
   const [isPurging, setIsPurging] = useState(false);
+  const [statusType, setStatusType] = useState<"success" | "error">("error");
 
   useEffect(() => {
     fetchExportData();
@@ -97,13 +98,16 @@ export default function AccountExportPage() {
         method: "DELETE",
       });
       if (res.ok) {
+        setStatusType("success");
         setPurgeStatus("All account data and session memory purged successfully.");
         setExportData(null);
         fetchExportData();
       } else {
+        setStatusType("error");
         setPurgeStatus("Failed to execute account erasure.");
       }
     } catch (err: any) {
+      setStatusType("error");
       setPurgeStatus("Network error during erasure request.");
     } finally {
       setIsPurging(false);
@@ -149,8 +153,18 @@ export default function AccountExportPage() {
       </div>
 
       {purgeStatus && (
-        <div className="p-4 rounded-xl bg-red-500/10 border border-red-500/30 text-red-700 text-sm flex items-center gap-2">
-          <AlertTriangle className="h-4 w-4 shrink-0" />
+        <div
+          className={`p-4 rounded-xl border text-sm flex items-center gap-2 ${
+            statusType === "success"
+              ? "bg-emerald-50 border-emerald-200 text-emerald-800"
+              : "bg-red-500/10 border-red-500/30 text-red-700"
+          }`}
+        >
+          {statusType === "success" ? (
+            <CheckCircle2 className="h-4 w-4 shrink-0" />
+          ) : (
+            <AlertTriangle className="h-4 w-4 shrink-0" />
+          )}
           {purgeStatus}
         </div>
       )}
@@ -187,10 +201,10 @@ export default function AccountExportPage() {
             Candidate Identity
           </div>
           <div className="text-xl font-bold font-serif text-[#2D0E03] truncate">
-            {exportData?.profile?.full_name || "Ayush Narkhede"}
+            {exportData?.profile?.full_name || "No Active Profile"}
           </div>
           <div className="text-xs text-[#6E5D53] mt-1 truncate">
-            {exportData?.profile?.email || "candidate@example.com"}
+            {exportData?.profile?.email || "Purged / Uninitialized"}
           </div>
         </Card>
 
@@ -258,6 +272,48 @@ export default function AccountExportPage() {
             <FileText className="h-4 w-4 text-[#B34A0E]" />
             Download Evidence Claims (.CSV)
           </Button>
+
+          <label className="inline-flex items-center gap-2 px-4 py-2 rounded-[10px] border border-[#6E250A]/25 bg-[#FEF5E7] text-xs font-semibold text-[#2D0E03] cursor-pointer hover:bg-[#FAD7A0]/40 transition-colors">
+            <Database className="h-4 w-4 text-[#B34A0E]" />
+            Import / Restore Bundle (.JSON)
+            <input
+              type="file"
+              accept=".json,application/json"
+              className="hidden"
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                try {
+                  const raw = JSON.parse(await file.text());
+                  const res = await fetch(`${API_BASE}/api/v1/account/import`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      profile: raw.profile,
+                      saved_jobs: raw.saved_jobs,
+                      follow_ups: raw.follow_ups,
+                      preferences: raw.preferences,
+                      custom_themes: raw.custom_themes,
+                    }),
+                  });
+                  if (res.ok) {
+                    const out = await res.json();
+                    setStatusType("success");
+                    setPurgeStatus(
+                      `Restored bundle: profile=${out.restored.profile}, saved_jobs=${out.restored.saved_jobs}, follow_ups=${out.restored.follow_ups}`
+                    );
+                    fetchExportData();
+                  } else {
+                    setStatusType("error");
+                    setPurgeStatus("Failed to import JSON bundle.");
+                  }
+                } catch {
+                  setStatusType("error");
+                  setPurgeStatus("Invalid JSON archive file.");
+                }
+              }}
+            />
+          </label>
         </div>
       </Card>
 

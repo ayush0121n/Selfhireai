@@ -141,8 +141,8 @@ export default function App() {
               <Text style={styles.actionCardCompany}>All 9 form fields populated from Evidence Vault</Text>
 
               <View style={styles.reviewBox}>
-                <Text style={styles.reviewItem}>• Full Name: Ayush Narkhede</Text>
-                <Text style={styles.reviewItem}>• Email: ayush@example.com</Text>
+                <Text style={styles.reviewItem}>• Full Name: Alex Rivera</Text>
+                <Text style={styles.reviewItem}>• Email: alex.rivera@example.com</Text>
                 <Text style={styles.reviewItem}>• Resume: Tailored ATS PDF (v1.2)</Text>
                 <Text style={styles.reviewItem}>• Experience: 1.5 yrs verified</Text>
                 <Text style={styles.reviewItem}>• Legal Attestation: Truthful Declaration</Text>

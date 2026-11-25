@@ -212,7 +212,7 @@ export default function LandingPage() {
           <span>•</span>
           <span className="font-sans">Autonomous Career OS</span>
         </div>
-        <p className="text-[12px] text-[#2D0E03]/50">© 2026 SelfHire.ai. All rights reserved. Made by Ayush Narkhede
+        <p className="text-[12px] text-[#2D0E03]/50">© 2026 SelfHire.ai. All rights reserved. Made by Alex Rivera
         </p>
       </footer>
     </div>

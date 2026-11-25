@@ -43,8 +43,8 @@ class ReactiveResumeAdapter:
             "profiles": [
                 {
                     "network": "LinkedIn",
-                    "username": "ayush-narkhede",
-                    "url": profile.linkedin_url or "https://linkedin.com/in/ayush-narkhede"
+                    "username": "alex-rivera",
+                    "url": profile.linkedin_url or "https://linkedin.com/in/alex-rivera"
                 },
                 {
                     "network": "GitHub",

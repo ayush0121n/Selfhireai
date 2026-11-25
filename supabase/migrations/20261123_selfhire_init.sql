@@ -380,3 +380,18 @@ CREATE POLICY "User Isolation - Messages" ON public.messages FOR ALL USING (auth
 CREATE POLICY "User Isolation - Audit" ON public.audit_events FOR ALL USING (auth.uid() = user_id);
 CREATE POLICY "User Isolation - Tasks" ON public.agent_tasks FOR ALL USING (auth.uid() = user_id);
 CREATE POLICY "User Isolation - Portal Accounts" ON public.portal_accounts FOR ALL USING (auth.uid() = user_id);
+CREATE POLICY "User Isolation - Application Fields" ON public.application_fields FOR ALL USING (
+    EXISTS (SELECT 1 FROM public.applications a WHERE a.id = application_id AND a.user_id = auth.uid())
+);
+CREATE POLICY "User Isolation - Submission Attempts" ON public.submission_attempts FOR ALL USING (
+    EXISTS (SELECT 1 FROM public.applications a WHERE a.id = application_id AND a.user_id = auth.uid())
+);
+CREATE POLICY "User Isolation - Receipts" ON public.receipts FOR ALL USING (
+    EXISTS (SELECT 1 FROM public.applications a WHERE a.id = application_id AND a.user_id = auth.uid())
+);
+
+-- =========================================================================
+-- PGVECTOR HNSW SEMANTIC INDEXES (all-MiniLM-L6-v2 384-dim)
+-- =========================================================================
+CREATE INDEX IF NOT EXISTS idx_jobs_embedding_hnsw
+    ON public.jobs USING hnsw (embedding vector_cosine_ops);

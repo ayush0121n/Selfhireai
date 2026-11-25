@@ -69,8 +69,8 @@ export default function MultiSourceResumeUpload() {
         setResult(data);
 
         // Auto-populate Candidate Profile, AI Agent memory, and application queue
-        const candidateName = data.extracted_full_name || "Ayush Narkhede";
-        const candidateEmail = data.extracted_email || "ayush.narkhede@example.com";
+        const candidateName = data.extracted_full_name || "Alex Rivera";
+        const candidateEmail = data.extracted_email || "alex.rivera@example.com";
         const extractedSkills = [
           "Python", "React", "JavaScript", "Playwright", "REST APIs", "SQL", "Node.js", "FastAPI", "TypeScript"
         ];
@@ -117,20 +117,20 @@ export default function MultiSourceResumeUpload() {
         status: "SUCCESS",
         source_type: activeSource,
         file_name: fileName,
-        extracted_full_name: "Ayush Narkhede",
-        extracted_email: "ayush.narkhede@example.com",
+        extracted_full_name: "Alex Rivera",
+        extracted_email: "alex.rivera@example.com",
         extracted_skills_count: 8,
         extracted_experience_count: 3,
         evidence_items_created: 7,
         storage_r2_url: `https://r2.selfhire.ai/resumes/cf_vault_${Date.now()}_${fileName}`,
-        preview_markdown: `### Ayush Narkhede\n**Email:** ayush.narkhede@example.com | **Source:** ${activeSource.toUpperCase()}\n\n#### Extracted Google XYZ Evidence Citations (7 Citations)\n- **Senior Full-Stack Engineer at TechCorp**\n  - Architected real-time transaction reconciliation service in Python and FastAPI, handling 15,000 req/s.\n  - Reduced end-to-end webhook delivery latency by 42% through Redis caching and asynchronous worker pools.\n  - Automated end-to-end browser regression workflows using Playwright, cutting deployment cycle times by 35%.\n\n#### Core Technical Competencies\nPython, React, TypeScript, Node.js, FastAPI, SQL, Playwright, REST APIs, Docker, CI/CD`
+        preview_markdown: `### Alex Rivera\n**Email:** alex.rivera@example.com | **Source:** ${activeSource.toUpperCase()}\n\n#### Extracted Google XYZ Evidence Citations (7 Citations)\n- **Senior Full-Stack Engineer at TechCorp**\n  - Architected real-time transaction reconciliation service in Python and FastAPI, handling 15,000 req/s.\n  - Reduced end-to-end webhook delivery latency by 42% through Redis caching and asynchronous worker pools.\n  - Automated end-to-end browser regression workflows using Playwright, cutting deployment cycle times by 35%.\n\n#### Core Technical Competencies\nPython, React, TypeScript, Node.js, FastAPI, SQL, Playwright, REST APIs, Docker, CI/CD`
       };
       setResult(fallbackData);
 
       const profilePayload = {
         user_id: "usr_candidate_pro",
-        full_name: "Ayush Narkhede",
-        email: "ayush.narkhede@example.com",
+        full_name: "Alex Rivera",
+        email: "alex.rivera@example.com",
         phone: "+91 98765 43210",
         location: "Pune, India / Remote",
         skills: ["Python", "React", "TypeScript", "Node.js", "FastAPI", "SQL", "Playwright", "REST APIs"],
@@ -145,8 +145,8 @@ export default function MultiSourceResumeUpload() {
 
       if (typeof window !== "undefined") {
         localStorage.setItem("selfhire_candidate_profile", JSON.stringify(profilePayload));
-        localStorage.setItem("selfhire_auth_name", "Ayush Narkhede");
-        localStorage.setItem("selfhire_auth_email", "ayush.narkhede@example.com");
+        localStorage.setItem("selfhire_auth_name", "Alex Rivera");
+        localStorage.setItem("selfhire_auth_email", "alex.rivera@example.com");
         window.dispatchEvent(new Event("selfhire_profile_updated"));
       }
     } finally {

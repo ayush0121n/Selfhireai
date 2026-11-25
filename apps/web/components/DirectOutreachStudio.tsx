@@ -109,12 +109,12 @@ export default function DirectOutreachStudio() {
             { name: "Priya Sharma", title: "Lead Tech Recruiter", location: "Bengaluru, India", linkedin: "https://linkedin.com" }
           ]
         },
-        email_subject: `Software Engineer Application — Ayush Narkhede (${compName} Tech Stack Alignment)`,
-        email_body: `Hi Hiring Team,\n\nI have been following ${compName}'s recent work in Technology & Distributed Systems, particularly your emphasis on production excellence.\n\nAs a software engineer specializing in Python, REST APIs, and PostgreSQL, I recently delivered direct impact by achieving 10,000 rpm / 99.9% uptime at my previous role.\n\nGiven ${compName}'s focus on scalable modern systems, I have tailored my verified resume below to highlight direct architectural parallels with your technical stack.\n\nWould welcome the chance to briefly connect if my background aligns with your team's roadmap.\n\nBest regards,\nAyush Narkhede\nEmail: ayush@example.com | +91 98765 43210\nLinkedIn: https://linkedin.com/in/ayush-narkhede`,
-        mailto_url: `mailto:${targetEmail}?subject=${encodeURIComponent(`Software Engineer Application — Ayush Narkhede (${compName})`)}`,
-        copy_paste_email: `TO: ${targetEmail}\nSUBJECT: Software Engineer Application — Ayush Narkhede (${compName})\n\nHi Hiring Team,\n\nI noticed your active opening...`,
-        tailored_resume_text: `AYUSH NARKHEDE\nayush@example.com | +91 98765 43210 | Pune, India\n------------------------------------------------------------------------\nPROFESSIONAL SUMMARY\nResults-driven Software Engineer with demonstrated experience in Python, FastAPI, and PostgreSQL. Track record of building reliable web services with 99.9% uptime.\n\nCORE TECHNICAL SKILLS\nPython, JavaScript, React, Node.js, SQL, REST APIs, Playwright, Redis\n\nPROFESSIONAL EXPERIENCE\nNextGen Systems — Software Engineer Intern (2023-01 to 2024-06)\n• Architected REST APIs handling 10,000 requests/minute with 99.9% uptime [Ref: ev_exp_01]\n• Optimized database query latency by 42% using index tuning and Redis caching [Ref: ev_exp_02]\n------------------------------------------------------------------------\n[Tamper-Proof Verification Hash: SHA-256 e8f3a902... 0 Hallucinations]`,
-        tailored_resume_markdown: `# Ayush Narkhede\n\n**Software Engineer**`,
+        email_subject: `Software Engineer Application — Alex Rivera (${compName} Tech Stack Alignment)`,
+        email_body: `Hi Hiring Team,\n\nI have been following ${compName}'s recent work in Technology & Distributed Systems, particularly your emphasis on production excellence.\n\nAs a software engineer specializing in Python, REST APIs, and PostgreSQL, I recently delivered direct impact by achieving 10,000 rpm / 99.9% uptime at my previous role.\n\nGiven ${compName}'s focus on scalable modern systems, I have tailored my verified resume below to highlight direct architectural parallels with your technical stack.\n\nWould welcome the chance to briefly connect if my background aligns with your team's roadmap.\n\nBest regards,\nAlex Rivera\nEmail: alex.rivera@example.com | +91 98765 43210\nLinkedIn: https://linkedin.com/in/alex-rivera`,
+        mailto_url: `mailto:${targetEmail}?subject=${encodeURIComponent(`Software Engineer Application — Alex Rivera (${compName})`)}`,
+        copy_paste_email: `TO: ${targetEmail}\nSUBJECT: Software Engineer Application — Alex Rivera (${compName})\n\nHi Hiring Team,\n\nI noticed your active opening...`,
+        tailored_resume_text: `ALEX RIVERA\nalex.rivera@example.com | +91 98765 43210 | Pune, India\n------------------------------------------------------------------------\nPROFESSIONAL SUMMARY\nResults-driven Software Engineer with demonstrated experience in Python, FastAPI, and PostgreSQL. Track record of building reliable web services with 99.9% uptime.\n\nCORE TECHNICAL SKILLS\nPython, JavaScript, React, Node.js, SQL, REST APIs, Playwright, Redis\n\nPROFESSIONAL EXPERIENCE\nNextGen Systems — Software Engineer Intern (2023-01 to 2024-06)\n• Architected REST APIs handling 10,000 requests/minute with 99.9% uptime [Ref: ev_exp_01]\n• Optimized database query latency by 42% using index tuning and Redis caching [Ref: ev_exp_02]\n------------------------------------------------------------------------\n[Tamper-Proof Verification Hash: SHA-256 e8f3a902... 0 Hallucinations]`,
+        tailored_resume_markdown: `# Alex Rivera\n\n**Software Engineer**`,
         send_status: "READY_FOR_DISPATCH"
       };
       setResult(fallbackResult);
@@ -144,7 +144,7 @@ export default function DirectOutreachStudio() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `Ayush_Narkhede_Resume_${result.company_intelligence.company_name.replace(/\s+/g, "_")}.txt`;
+    link.download = `Alex_Rivera_Resume_${result.company_intelligence.company_name.replace(/\s+/g, "_")}.txt`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);

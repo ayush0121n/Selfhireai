@@ -186,7 +186,7 @@ class ResumeRAGEngine:
 
         return RAGResumePayload(
             candidate_name=name,
-            email=email_match.group(0) if email_match else "ayush@example.com",
+            email=email_match.group(0) if email_match else "alex.rivera@example.com",
             phone=phone_match.group(0) if phone_match else "+91 98765 43210",
             skills=skills,
             bullets=bullets,

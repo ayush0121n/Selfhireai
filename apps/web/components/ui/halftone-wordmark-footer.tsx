@@ -190,7 +190,7 @@ export default function HalftoneWordmarkFooter({
   wordmark = "selfhire.ai",
   label = "SelfHire.ai",
   meta = "©2026 · Deterministic Career Agent · Pune, IN",
-  copyright = "© 2026 SelfHire.ai. All rights reserved. Made by Ayush Narkhede",
+  copyright = "© 2026 SelfHire.ai. All rights reserved. Made by Alex Rivera",
   columns = DEFAULT_COLUMNS,
   backToTop = true,
   preset = "selfhire",

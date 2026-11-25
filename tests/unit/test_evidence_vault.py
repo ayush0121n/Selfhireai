@@ -19,7 +19,7 @@ def test_health_endpoint():
 
 def test_evidence_vault_upload_and_retrieve():
     resume_content = (
-        "Ayush Narkhede\n"
+        "Alex Rivera\n"
         "Lead Full Stack Software Engineer\n"
         "Skills: Python, TypeScript, React, Next.js, FastAPI, PostgreSQL, Docker\n"
         "Engineered scalable microservices reducing p99 latency by 42% across 100k daily users.\n"

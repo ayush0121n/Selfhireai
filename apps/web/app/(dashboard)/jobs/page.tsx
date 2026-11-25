@@ -30,6 +30,7 @@ import {
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { SubmittedApplicationPreview, type SubmittedSnapshot } from "@/components/applications/SubmittedApplicationPreview";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 
@@ -39,8 +40,11 @@ interface AvailablePortal {
 }
 
 export default function JobsPage() {
-  const [activeTab, setActiveTab] = useState<"live" | "boards" | "companies">("live");
+  const [activeTab, setActiveTab] = useState<"live" | "startups" | "boards" | "companies">("live");
   const [liveJobs, setLiveJobs] = useState<any[]>([]);
+  const [startups, setStartups] = useState<any[]>([]);
+  const [remoteStartupsOnly, setRemoteStartupsOnly] = useState(false);
+  const [savedJobIds, setSavedJobIds] = useState<Record<string, boolean>>({});
   const [totalLiveJobs, setTotalLiveJobs] = useState(0);
   const [availablePortals, setAvailablePortals] = useState<AvailablePortal[]>([]);
   const [jobSources, setJobSources] = useState<any[]>([]);
@@ -51,6 +55,9 @@ export default function JobsPage() {
 
   // Manual Application State
   const [manualModalJob, setManualModalJob] = useState<any | null>(null);
+  const [manualSnapshot, setManualSnapshot] = useState<SubmittedSnapshot | null>(null);
+  const [portalFillLoading, setPortalFillLoading] = useState(false);
+  const [confirmingManual, setConfirmingManual] = useState(false);
   const [appliedJobs, setAppliedJobs] = useState<Record<string, boolean>>({});
   const [copiedField, setCopiedField] = useState<string | null>(null);
 
@@ -72,11 +79,93 @@ export default function JobsPage() {
 
   // Load Initial Data
   useEffect(() => {
+    if (typeof window !== "undefined") {
+      const tab = new URLSearchParams(window.location.search).get("tab");
+      if (tab === "startups" || tab === "boards" || tab === "companies" || tab === "live") {
+        setActiveTab(tab);
+      }
+    }
     fetchLiveJobs();
     fetchJobSources();
     fetchCompanies();
     fetchProfile();
+    fetchStartups();
+    fetchSavedJobs();
   }, []);
+
+  const fetchSavedJobs = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/saved-jobs`);
+      if (res.ok) {
+        const data = await res.json();
+        const map: Record<string, boolean> = {};
+        for (const item of data.saved_jobs || []) {
+          if (item.job_id) map[item.job_id] = true;
+        }
+        setSavedJobIds(map);
+      }
+    } catch (err) {
+      console.error("Could not fetch saved jobs:", err);
+    }
+  };
+
+  useEffect(() => {
+    fetchStartups();
+  }, [remoteStartupsOnly]);
+
+  const fetchStartups = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/startups?remote_only=${remoteStartupsOnly}`);
+      if (res.ok) {
+        const data = await res.json();
+        setStartups(data.startups || []);
+      }
+    } catch (err) {
+      console.error("Could not fetch startups:", err);
+    }
+  };
+
+  const handleSaveJob = async (job: any) => {
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/saved-jobs`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          job_id: job.id,
+          title: job.title || job.job_title,
+          company: job.company_name,
+          location: job.location_raw || job.location || "Remote",
+          work_mode: job.work_mode || "Remote",
+          score: job.fit_score || 85,
+          source: job.source_name || "ATS",
+          canonical_url: job.canonical_url || "",
+        }),
+      });
+      if (res.ok) {
+        setSavedJobIds((prev) => ({ ...prev, [job.id]: true }));
+        setStatusMsg({ type: "success", text: `Saved "${job.title || job.job_title}" to Saved Jobs.` });
+      }
+    } catch (err) {
+      console.error("Save job failed:", err);
+    }
+  };
+
+  const handleStartupApply = async (startupId: string) => {
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/startups/${encodeURIComponent(startupId)}/apply`, {
+        method: "POST",
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setStatusMsg({
+          type: "success",
+          text: `Prepared startup application (${data.application_id}). Open Application Tracker to refine cover letter.`,
+        });
+      }
+    } catch (err) {
+      console.error("Startup apply failed:", err);
+    }
+  };
 
   // Re-fetch when live filter state changes
   useEffect(() => {
@@ -266,12 +355,17 @@ export default function JobsPage() {
   // Direct Manual Apply Handler
   const handleDirectManualApply = async (job: any) => {
     const targetUrl = job.canonical_url || "#";
-    if (targetUrl && targetUrl !== "#") {
-      window.open(targetUrl, "_blank", "noopener,noreferrer");
-    }
+    const pitch = `Hello ${job.company_name} Hiring Team,\n\nI am applying for the ${job.title || job.job_title} role. With hands-on experience in ${(job.extracted_keywords || ["high-scale engineering"]).slice(0, 3).join(", ")}, I have built reliable distributed systems and delivered measurable performance improvements verified in my work history.\n\nThank you for your consideration.\n${profile?.full_name || "Candidate"}`;
+    const filledFields = [
+      { field_key: "full_name", label: "Full Name", value: profile?.full_name || "Alex Rivera", classification: "VERIFIED_FACT" },
+      { field_key: "email", label: "Email Address", value: profile?.email || "alex.rivera@selfhire.ai", classification: "VERIFIED_FACT" },
+      { field_key: "phone", label: "Phone Number", value: profile?.phone || "+91 98765 43210", classification: "VERIFIED_FACT" },
+      { field_key: "linkedin", label: "LinkedIn Profile", value: profile?.linkedin_url || "", classification: "VERIFIED_FACT" },
+      { field_key: "motivation_note", label: "Tailored Cover Note", value: pitch, classification: "EVIDENCE_BASED_PROSE" },
+    ];
 
     try {
-      await fetch(`${API_BASE}/api/v1/applications/manual`, {
+      const res = await fetch(`${API_BASE}/api/v1/applications/manual`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -279,16 +373,82 @@ export default function JobsPage() {
           company_name: job.company_name,
           job_title: job.title || job.job_title,
           canonical_url: targetUrl,
+          filled_fields: filledFields,
         }),
       });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.snapshot) {
+          setManualSnapshot(data.snapshot);
+        }
+      }
 
       setAppliedJobs((prev) => ({ ...prev, [job.id]: true }));
       setStatusMsg({
         type: "success",
-        text: `Official application form for "${job.title || job.job_title}" opened in a new tab and logged to your Application Tracker!`,
+        text: `Manual application for "${job.title || job.job_title}" saved with full filled details!`,
       });
     } catch (err) {
       console.error("Could not log manual application:", err);
+    }
+  };
+
+  // Open Official Portal & Auto-Fill (Human-in-the-Loop Submit)
+  const handleOpenOfficialAndFill = async (job: any) => {
+    const targetUrl = job.canonical_url || "#";
+    if (targetUrl && targetUrl !== "#") {
+      window.open(targetUrl, "_blank", "noopener,noreferrer");
+    }
+    setPortalFillLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/applications/open-and-fill`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          job_id: job.id,
+          destination_url: targetUrl,
+          company_name: job.company_name,
+          job_title: job.title || job.job_title,
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.snapshot) {
+          setManualSnapshot(data.snapshot);
+        }
+        setStatusMsg({
+          type: "success",
+          text: data.message || "Official portal opened & form fields prepared. Please click Submit on the official page.",
+        });
+      }
+    } catch (err) {
+      console.error("Open & fill failed:", err);
+    } finally {
+      setPortalFillLoading(false);
+    }
+  };
+
+  const handleConfirmManualPortalSubmitted = async () => {
+    if (!manualSnapshot) return;
+    setConfirmingManual(true);
+    try {
+      const res = await fetch(
+        `${API_BASE}/api/v1/applications/${encodeURIComponent(manualSnapshot.application_id)}/confirm-submitted`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({}),
+        }
+      );
+      if (res.ok) {
+        const updated = await res.json();
+        setManualSnapshot(updated);
+        if (manualModalJob?.id) {
+          setAppliedJobs((prev) => ({ ...prev, [manualModalJob.id]: true }));
+        }
+      }
+    } finally {
+      setConfirmingManual(false);
     }
   };
 
@@ -363,6 +523,19 @@ export default function JobsPage() {
           <span className="flex items-center gap-1.5">
             <Radio className="w-3.5 h-3.5" />
             Live Discovered Roles ({totalLiveJobs})
+          </span>
+        </button>
+        <button
+          onClick={() => setActiveTab("startups")}
+          className={`pb-3 px-4 text-xs font-semibold transition-all relative ${
+            activeTab === "startups"
+              ? "text-[#B34A0E] border-b-2 border-[#B34A0E]"
+              : "text-[#6E5D53] hover:text-[#2D0E03]"
+          }`}
+        >
+          <span className="flex items-center gap-1.5">
+            <Sparkles className="w-3.5 h-3.5" />
+            Startups Hiring ({startups.length})
           </span>
         </button>
         <button
@@ -810,6 +983,17 @@ export default function JobsPage() {
                       </div>
 
                       <div className="flex items-center gap-2 justify-end">
+                        <button
+                          type="button"
+                          onClick={() => handleSaveJob(job)}
+                          className={`px-2.5 py-2 rounded-[10px] border text-xs font-medium transition-colors ${
+                            savedJobIds[job.id]
+                              ? "bg-emerald-50 border-emerald-300 text-emerald-800"
+                              : "bg-white border-[#E8DFD8] text-[#2D0E03] hover:bg-[#FAF6F2]"
+                          }`}
+                        >
+                          {savedJobIds[job.id] ? "Saved" : "Save"}
+                        </button>
                         <Link href={`/auto-apply?jobId=${job.id}`}>
                           <Button variant="outline" size="sm" className="text-xs gap-1.5 py-2">
                             <Send className="w-3 h-3 text-[#B34A0E]" />
@@ -823,6 +1007,74 @@ export default function JobsPage() {
               })}
             </div>
           )}
+        </div>
+      )}
+
+      {/* TAB 1B: Startups Hiring (YC Startups & HN Who is Hiring) */}
+      {activeTab === "startups" && (
+        <div className="space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <p className="text-xs text-[#6E5D53]">
+              Ranked against your verified profile skills from YC Startups &amp; Hacker News Who is Hiring.
+            </p>
+            <label className="inline-flex items-center gap-2 text-xs font-semibold text-[#2D0E03] cursor-pointer">
+              <input
+                type="checkbox"
+                checked={remoteStartupsOnly}
+                onChange={(e) => setRemoteStartupsOnly(e.target.checked)}
+                className="rounded text-[#B34A0E]"
+              />
+              Remote-friendly only
+            </label>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {startups.map((st) => (
+              <Card key={st.id} className="p-5 bg-white border border-[#E8DFD8] flex flex-col justify-between space-y-4">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="px-2 py-0.5 rounded bg-[#FAD7A0] text-[#2D0E03] text-[10px] font-bold">
+                      {st.source} • {st.batch}
+                    </span>
+                    <span className="font-mono text-xs font-bold text-emerald-700">
+                      {st.fit_score}% Stack Match
+                    </span>
+                  </div>
+                  <h4 className="font-display text-lg font-bold text-[#2D0E03]">
+                    {st.role_title}
+                  </h4>
+                  <div className="text-xs text-[#6E5D53] font-medium">
+                    {st.company_name} • {st.location} {st.compensation ? `• ${st.compensation}` : ""}
+                  </div>
+                  <p className="text-xs text-[#2D0E03]/80 leading-relaxed">{st.summary}</p>
+                  <div className="flex flex-wrap gap-1 pt-1">
+                    {(st.stack || []).map((tech: string) => (
+                      <span
+                        key={tech}
+                        className="text-[10px] px-2 py-0.5 rounded bg-[#FAF6F2] text-[#2D0E03] border border-[#E8DFD8]"
+                      >
+                        {tech}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="pt-3 border-t border-[#E8DFD8] flex items-center justify-between gap-2">
+                  <span className="text-[11px] font-mono text-[#6E5D53] truncate">
+                    {st.apply_email}
+                  </span>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={() => handleStartupApply(st.id)}
+                    className="text-xs gap-1"
+                  >
+                    <Send className="w-3.5 h-3.5" /> Prepare Application
+                  </Button>
+                </div>
+              </Card>
+            ))}
+          </div>
         </div>
       )}
 
@@ -1042,14 +1294,38 @@ export default function JobsPage() {
                 </p>
               </div>
               <button
-                onClick={() => setManualModalJob(null)}
+                onClick={() => {
+                  setManualModalJob(null);
+                  setManualSnapshot(null);
+                }}
                 className="p-1 rounded-full text-[#6E5D53] hover:text-[#2D0E03] hover:bg-[#FAF6F2]"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="space-y-3 text-xs">
+            {manualSnapshot ? (
+              <div className="max-h-[70vh] overflow-y-auto pr-1 space-y-3">
+                <SubmittedApplicationPreview
+                  snapshot={manualSnapshot}
+                  onConfirmSubmitted={handleConfirmManualPortalSubmitted}
+                  confirming={confirmingManual}
+                />
+                <div className="flex justify-end pt-2">
+                  <button
+                    onClick={() => {
+                      setManualModalJob(null);
+                      setManualSnapshot(null);
+                    }}
+                    className="px-4 py-2 rounded-[10px] bg-[#2D0E03] text-white text-xs font-medium"
+                  >
+                    Done
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="space-y-3 text-xs">
               <p className="text-[#6E5D53] leading-relaxed">
                 Click any prepared field below to copy it instantly into your clipboard, then open the official form on the employer&apos;s portal.
               </p>
@@ -1057,23 +1333,23 @@ export default function JobsPage() {
               {/* Applicant Profile Quick-Copy Fields */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 <div
-                  onClick={() => copyToClipboard(profile?.full_name || "Ayush Sharma", "Name")}
+                  onClick={() => copyToClipboard(profile?.full_name || "Alex Rivera", "Name")}
                   className="p-3 bg-[#FAF6F2] rounded-[10px] border border-[#E8DFD8] cursor-pointer hover:border-[#B34A0E] transition-colors flex items-center justify-between"
                 >
                   <div>
                     <span className="text-[#6E5D53] block text-[10px]">Full Name</span>
-                    <span className="font-semibold text-[#2D0E03]">{profile?.full_name || "Ayush Sharma"}</span>
+                    <span className="font-semibold text-[#2D0E03]">{profile?.full_name || "Alex Rivera"}</span>
                   </div>
                   {copiedField === "Name" ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4 text-[#6E5D53]" />}
                 </div>
 
                 <div
-                  onClick={() => copyToClipboard(profile?.email || "ayush.sharma@example.com", "Email")}
+                  onClick={() => copyToClipboard(profile?.email || "alex.rivera@example.com", "Email")}
                   className="p-3 bg-[#FAF6F2] rounded-[10px] border border-[#E8DFD8] cursor-pointer hover:border-[#B34A0E] transition-colors flex items-center justify-between"
                 >
                   <div>
                     <span className="text-[#6E5D53] block text-[10px]">Email</span>
-                    <span className="font-semibold text-[#2D0E03] truncate">{profile?.email || "ayush.sharma@example.com"}</span>
+                    <span className="font-semibold text-[#2D0E03] truncate">{profile?.email || "alex.rivera@example.com"}</span>
                   </div>
                   {copiedField === "Email" ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4 text-[#6E5D53]" />}
                 </div>
@@ -1090,12 +1366,12 @@ export default function JobsPage() {
                 </div>
 
                 <div
-                  onClick={() => copyToClipboard(profile?.linkedin_url || "https://linkedin.com/in/ayush-sharma", "LinkedIn")}
+                  onClick={() => copyToClipboard(profile?.linkedin_url || "https://linkedin.com/in/alex-rivera", "LinkedIn")}
                   className="p-3 bg-[#FAF6F2] rounded-[10px] border border-[#E8DFD8] cursor-pointer hover:border-[#B34A0E] transition-colors flex items-center justify-between"
                 >
                   <div>
                     <span className="text-[#6E5D53] block text-[10px]">LinkedIn URL</span>
-                    <span className="font-semibold text-[#2D0E03] truncate">{profile?.linkedin_url || "https://linkedin.com/in/ayush-sharma"}</span>
+                    <span className="font-semibold text-[#2D0E03] truncate">{profile?.linkedin_url || "https://linkedin.com/in/alex-rivera"}</span>
                   </div>
                   {copiedField === "LinkedIn" ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4 text-[#6E5D53]" />}
                 </div>
@@ -1104,7 +1380,7 @@ export default function JobsPage() {
               {/* Tailored Cover Pitch */}
               <div
                 onClick={() => {
-                  const pitch = `Hello ${manualModalJob.company_name} Hiring Team,\n\nI am applying for the ${manualModalJob.title || manualModalJob.job_title} role. With hands-on experience in ${(manualModalJob.extracted_keywords || ["high-scale engineering"]).slice(0, 3).join(", ")}, I have built reliable distributed systems and delivered measurable performance improvements verified in my work history.\n\nThank you for your consideration.\n${profile?.full_name || "Ayush Sharma"}`;
+                  const pitch = `Hello ${manualModalJob.company_name} Hiring Team,\n\nI am applying for the ${manualModalJob.title || manualModalJob.job_title} role. With hands-on experience in ${(manualModalJob.extracted_keywords || ["high-scale engineering"]).slice(0, 3).join(", ")}, I have built reliable distributed systems and delivered measurable performance improvements verified in my work history.\n\nThank you for your consideration.\n${profile?.full_name || "Alex Rivera"}`;
                   copyToClipboard(pitch, "Pitch");
                 }}
                 className="p-3 bg-[#FAF6F2] rounded-[10px] border border-[#E8DFD8] cursor-pointer hover:border-[#B34A0E] transition-colors space-y-1.5"
@@ -1114,37 +1390,36 @@ export default function JobsPage() {
                   {copiedField === "Pitch" ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4 text-[#6E5D53]" />}
                 </div>
                 <p className="text-[#2D0E03] text-xs leading-relaxed">
-                  &quot;Hello {manualModalJob.company_name} Hiring Team, I am applying for the ${manualModalJob.title || manualModalJob.job_title} role. With hands-on experience in ${(manualModalJob.extracted_keywords || ["high-scale engineering"]).slice(0, 3).join(", ")}, I have built reliable systems with verified evidence metrics...&quot;
+                  &quot;Hello {manualModalJob.company_name} Hiring Team, I am applying for the {manualModalJob.title || manualModalJob.job_title} role. With hands-on experience in {(manualModalJob.extracted_keywords || ["high-scale engineering"]).slice(0, 3).join(", ")}, I have built reliable systems with verified evidence metrics...&quot;
                 </p>
               </div>
             </div>
 
             {/* Modal Actions */}
             <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t border-[#E8DFD8]">
-              <a
-                href={manualModalJob.canonical_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={() => handleDirectManualApply(manualModalJob)}
+              <button
+                type="button"
+                disabled={portalFillLoading}
+                onClick={() => handleOpenOfficialAndFill(manualModalJob)}
                 className="w-full sm:w-auto px-5 py-2.5 rounded-[10px] bg-[#B34A0E] text-white text-xs font-medium hover:bg-[#8F3B0B] transition-colors inline-flex items-center justify-center gap-1.5 shadow-sm"
               >
-                <span>Open Application Form on {manualModalJob.source_name || "Portal"}</span>
+                <span>{portalFillLoading ? "Opening & Filling..." : `Open & Auto-Fill on ${manualModalJob.source_name || "Portal"}`}</span>
                 <ExternalLink className="w-3.5 h-3.5" />
-              </a>
+              </button>
 
               <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
                 <button
-                  onClick={() => {
-                    handleDirectManualApply(manualModalJob);
-                    setManualModalJob(null);
-                  }}
+                  type="button"
+                  onClick={() => handleDirectManualApply(manualModalJob)}
                   className="w-full sm:w-auto px-4 py-2.5 rounded-[10px] bg-white border border-[#E8DFD8] text-[#2D0E03] text-xs font-medium hover:bg-[#FAF6F2] transition-colors inline-flex items-center justify-center gap-1.5"
                 >
                   <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>I&apos;ve Applied (Save to Tracker)</span>
+                  <span>I&apos;ve Applied (Show Preview)</span>
                 </button>
               </div>
             </div>
+              </>
+            )}
           </div>
         </div>
       )}

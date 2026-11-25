@@ -22,7 +22,7 @@ def test_profile_retrieval_endpoint():
     resp = client.get("/api/v1/profile")
     assert resp.status_code == 200
     data = resp.json()
-    assert data["full_name"] == "Ayush Narkhede"
+    assert data["full_name"] == "Alex Rivera"
     assert "Python" in data["skills"]
 
 

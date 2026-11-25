@@ -57,8 +57,8 @@
 - `POST /approvals/{id}/approve`: Seal approval with user signature; marks single-use lease active.
 - `POST /approvals/{id}/deny`: Reject proposed package; releases browser session safely.
 
-### 2.6 Cold Outreach CRM
-- `GET /contacts`: Search recruiter directory cross-referenced by company name.
+### 2.7 Cold Outreach CRM
+- `GET /contacts`: Search recruiter directory cross-referenced by company name (`?q=&limit=`).
 - `POST /messages/draft`: Generate personalized 1:1 outreach draft using Google XYZ formula.
 - `POST /messages/{id}/send`: Approve and trigger mail dispatch or WhatsApp deep-link generation.
 

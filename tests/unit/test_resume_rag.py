@@ -2,8 +2,8 @@ import pytest
 from services.api.engine.resume.rag import ResumeRAGEngine
 
 SAMPLE_RESUME = """
-Ayush Sharma
-ayush@example.com | +91 98765 43210
+Alex Rivera
+alex.rivera@example.com | +91 98765 43210
 
 EXPERIENCE
 Software Engineer | Acme Corp (2023 - Present)
@@ -19,8 +19,8 @@ def test_resume_rag_extraction():
     engine = ResumeRAGEngine()
     result = engine.ingest_resume(SAMPLE_RESUME, user_id="usr_test_01")
     
-    assert result.candidate_name == "Ayush Sharma"
-    assert result.email == "ayush@example.com"
+    assert result.candidate_name == "Alex Rivera"
+    assert result.email == "alex.rivera@example.com"
     assert "Python" in result.skills
     assert "FastAPI" in result.skills
     assert len(result.bullets) >= 3

@@ -9,7 +9,6 @@ $ErrorActionPreference = 'Continue'
 function Show-Banner {
     Write-Host '===============================================================================' -ForegroundColor Yellow
     Write-Host '            SelfHire.ai - Privacy-First Autonomous Career OS' -ForegroundColor White
-    Write-Host '        Maison Salome Serif | Warm Espresso and Terracotta Palette' -ForegroundColor DarkYellow
     Write-Host '===============================================================================' -ForegroundColor Yellow
     Write-Host ''
 }
@@ -24,23 +23,24 @@ if ($Mode -eq 'all' -or -not $Mode) {
     if (-not (Test-Path 'data\selfhire.db')) {
         Write-Host '[1/4] Initializing local database and seeding portals/recruiters...' -ForegroundColor Magenta
         python scripts\seed_database.py
-    } else {
+    }
+    else {
         Write-Host '[1/4] SQLite database verified.' -ForegroundColor DarkGreen
     }
 
     # 2. Launch FastAPI Backend
     Write-Host '[2/4] Starting FastAPI Backend on http://127.0.0.1:8000...' -ForegroundColor Cyan
-    Start-Process powershell -ArgumentList '-NoExit', '-Command', '$host.UI.RawUI.WindowTitle = "SelfHire.ai Backend (FastAPI)"; python -m uvicorn services.api.main:app --host 127.0.0.1 --port 8000 --reload'
+    Start-Process powershell -ArgumentList '-NoExit', '-Command', 'python -m uvicorn services.api.main:app --host 127.0.0.1 --port 8000 --reload'
 
     Start-Sleep -Seconds 2
 
     # 3. Launch Next.js Web Dashboard
     Write-Host '[3/4] Starting Next.js Web Dashboard on http://localhost:3000...' -ForegroundColor Green
-    Start-Process powershell -ArgumentList '-NoExit', '-Command', '$host.UI.RawUI.WindowTitle = "SelfHire.ai Web Dashboard"; cd apps\web; npm run dev'
+    Start-Process powershell -ArgumentList '-NoExit', '-Command', 'Set-Location apps\web; npm run dev'
 
     # 4. Launch Background Task Worker
     Write-Host '[4/4] Starting Background Task Worker Runner...' -ForegroundColor Magenta
-    Start-Process powershell -ArgumentList '-NoExit', '-Command', '$host.UI.RawUI.WindowTitle = "SelfHire.ai Background Worker"; python -m services.worker.runner'
+    Start-Process powershell -ArgumentList '-NoExit', '-Command', 'python -m services.worker.runner'
 
     Start-Sleep -Seconds 2
 

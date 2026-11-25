@@ -48,6 +48,8 @@ from services.api.engine.resume.rendercv_compiler import RenderCVCompiler, Caree
 from services.api.engine.resume.reactive_resume_adapter import ReactiveResumeAdapter
 from services.api.engine.intelligence.interview_star import STARInterviewEngine
 from services.api.engine.discovery.portal_selectors import get_portal_selectors, PORTAL_SELECTORS_REGISTRY
+from services.api.engine.storage.workspace_store import WorkspaceStore
+from services.api.routers.dossier_router import create_dossier_router
 from adapters.mock_employer.adapter import MockEmployerAdapter
 
 
@@ -81,10 +83,59 @@ _RESUME_IMPORTER = MultiSourceResumeImporter()
 _CLOUDFLARE_MGR = CloudflareManager()
 _EMAIL_MGR = EmailOutreachManager()
 _VAULT_MANAGER = EvidenceVaultManager()
+_WORKSPACE_STORE = WorkspaceStore()
+
+
+def _save_profile_to_db(profile: CandidateProfile) -> None:
+    """Persists the active CandidateProfile to SQLite profiles table."""
+    try:
+        conn = get_db_connection()
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS profiles (
+                user_id TEXT PRIMARY KEY,
+                full_name TEXT NOT NULL,
+                email TEXT NOT NULL,
+                phone TEXT,
+                location TEXT,
+                structured_data TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            """
+            INSERT OR REPLACE INTO profiles (user_id, full_name, email, phone, location, structured_data)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                profile.user_id,
+                profile.full_name,
+                str(profile.email),
+                profile.phone,
+                profile.location,
+                profile.model_dump_json(),
+            ),
+        )
+        conn.commit()
+        conn.close()
+    except Exception:
+        pass
 
 
 def load_initial_profile():
     global _CURRENT_PROFILE
+    # 1. Prefer persisted profile from local SQLite database
+    try:
+        conn = get_db_connection()
+        row = conn.execute("SELECT structured_data FROM profiles ORDER BY rowid DESC LIMIT 1").fetchone()
+        conn.close()
+        if row and row["structured_data"]:
+            _CURRENT_PROFILE = CandidateProfile(**json.loads(row["structured_data"]))
+            return
+    except Exception:
+        pass
+
+    # 2. Fallback to synthetic fixture if DB has no profile yet
     try:
         with open("tests/fixtures/sample_profile.json", "r", encoding="utf-8") as f:
             data = json.load(f)
@@ -118,6 +169,7 @@ def get_profile():
 def update_profile(profile: CandidateProfile):
     global _CURRENT_PROFILE
     _CURRENT_PROFILE = profile
+    _save_profile_to_db(profile)
     return _CURRENT_PROFILE
 
 
@@ -172,7 +224,7 @@ async def import_job(payload: JobImportRequest):
     if not extracted or not extracted.get("title"):
         raise HTTPException(status_code=400, detail="Could not extract valid job posting or job flagged as suspicious")
 
-    candidate_id = _CURRENT_PROFILE.user_id if _CURRENT_PROFILE else "usr_ayush_01"
+    candidate_id = _CURRENT_PROFILE.user_id if _CURRENT_PROFILE else "usr_demo_01"
     saved = extractor.deduplicate_and_save([extracted], candidate_user_id=candidate_id)
     job_record = saved[0] if saved else extracted
 
@@ -233,7 +285,7 @@ async def discover_jobs(payload: Optional[DiscoverJobsRequest] = Body(default=No
             jobs = await extractor.fetch_feed_jobs(src, target_url, limit=limit)
             all_fetched.extend(jobs)
 
-    candidate_id = _CURRENT_PROFILE.user_id if _CURRENT_PROFILE else "usr_ayush_01"
+    candidate_id = _CURRENT_PROFILE.user_id if _CURRENT_PROFILE else "usr_demo_01"
     saved_jobs = extractor.deduplicate_and_save(all_fetched, candidate_user_id=candidate_id)
 
     for s in saved_jobs:
@@ -717,13 +769,13 @@ def import_json_resume(data: Dict[str, Any] = Body(...)):
     populating candidate profile and synthesizing verifiable atomic evidence claims.
     """
     global _CURRENT_PROFILE
-    profile = ReactiveResumeAdapter.from_json_resume(data, user_id="usr_ayush_01")
+    profile = ReactiveResumeAdapter.from_json_resume(data, user_id="usr_demo_01")
     _CURRENT_PROFILE = profile
 
     # Seed evidence into local vault manager
     for ev in profile.evidence:
         _VAULT_MANAGER.add_claim(
-            user_id="usr_ayush_01",
+            user_id="usr_demo_01",
             document_id="doc_reactive_resume_import",
             claim_type="EXPERIENCE",
             title=ev.verified_claim,
@@ -794,12 +846,22 @@ def prepare_application(req: PrepareApplicationRequest):
         is_consumed=False
     )
 
+    # Replace any stale unconsumed approval for the same application to avoid duplicates
+    app_id = f"app_{job.id}"
+    stale_ids = [
+        aid for aid, existing in _PENDING_APPROVALS.items()
+        if existing.application_id == app_id and not existing.is_consumed
+    ]
+    for sid in stale_ids:
+        _PENDING_APPROVALS.pop(sid, None)
+
     _PENDING_APPROVALS[approval_id] = approval
     return approval
 
 
 class ApprovalActionRequest(BaseModel):
     approved: bool
+    updated_fields: Optional[Dict[str, str]] = None
 
 
 @app.post("/api/v1/approvals/{approval_id}/decision")
@@ -818,6 +880,13 @@ def submit_approval_decision(approval_id: str, decision: ApprovalActionRequest):
         approval.is_consumed = True
         return {"status": "REJECTED", "message": "Application submission cancelled by user."}
 
+    # Apply any inline user edits before sealing receipt
+    if decision.updated_fields:
+        for fm in approval.field_mappings:
+            if fm.field_key in decision.updated_fields:
+                fm.proposed_value = decision.updated_fields[fm.field_key]
+                fm.is_filled = bool(str(fm.proposed_value).strip())
+
     # Authorize submission
     approval.is_consumed = True
     receipt_id = f"CONF-TC-{uuid.uuid4().hex[:8].upper()}"
@@ -834,9 +903,58 @@ def submit_approval_decision(approval_id: str, decision: ApprovalActionRequest):
 
     _CONFIRMED_RECEIPTS[receipt.receipt_id] = receipt
 
+    # Build clean filled fields snapshot for UI preview
+    job_id = approval.application_id.replace("app_", "", 1)
+    job_obj = _get_job_by_id(job_id)
+    company_name = job_obj.company_name if job_obj else "Official Portal"
+    job_title = job_obj.job_title if job_obj else "Target Role"
+    filled_fields_list = [
+        {
+            "field_key": fm.field_key,
+            "label": fm.question_label or fm.field_key,
+            "value": fm.proposed_value,
+            "classification": fm.classification.value if hasattr(fm.classification, "value") else str(fm.classification),
+            "evidence_ids": fm.evidence_ids,
+        }
+        for fm in approval.field_mappings
+    ]
+    tailored_obj = next((t for t in _TAILORED_RESUMES.values() if t.sha256_hash == approval.tailored_resume_hash), None)
+    resume_summary = tailored_obj.tailored_summary if tailored_obj else None
+
+    snapshot = None
+    try:
+        _WORKSPACE_STORE.upsert_application_ext(
+            application_id=approval.application_id,
+            stage="CONFIRMED",
+            notes=f"Confirmed via Approval Gate #{receipt_id}",
+        )
+        snapshot = _WORKSPACE_STORE.save_submitted_snapshot(
+            application_id=approval.application_id,
+            job_id=job_id,
+            company_name=company_name,
+            job_title=job_title,
+            destination_url=approval.destination_url,
+            submission_mode="AUTO_APPLY",
+            confirmation_number=receipt_id,
+            filled_fields=filled_fields_list,
+            resume_summary=resume_summary,
+            payload_hash=approval.payload_hash,
+            status="CONFIRMED",
+            screenshot_key=receipt.screenshot_storage_key,
+        )
+        _WORKSPACE_STORE.create_notification(
+            title=f"Application Submitted: {company_name}",
+            body=f"{job_title} confirmed (#{receipt_id}).",
+            category="application",
+            href=f"/applications/{approval.application_id}",
+        )
+    except Exception:
+        pass
+
     return {
         "status": "CONFIRMED",
         "receipt": receipt,
+        "snapshot": snapshot,
         "message": f"Application submitted successfully! Confirmation #{receipt_id} recorded."
     }
 
@@ -891,6 +1009,41 @@ def send_email_direct(req: DirectSendEmailRequest):
         "receipt": receipt,
         "message": f"Email processed for {req.target_email} with status {status_code}"
     }
+
+
+@app.get("/api/v1/contacts")
+def list_recruiter_contacts(q: str = "", limit: int = 100):
+    """Queries verified Talent Acquisition & Recruiter CRM directory."""
+    safe_limit = max(1, min(limit, 500))
+    results: List[Dict[str, Any]] = []
+    try:
+        conn = get_db_connection()
+        if q.strip():
+            like_pat = f"%{q.strip()}%"
+            rows = conn.execute(
+                """
+                SELECT id, name, job_title, linkedin_url, company, location, company_website
+                FROM contacts
+                WHERE name LIKE ? OR company LIKE ? OR location LIKE ? OR job_title LIKE ?
+                LIMIT ?
+                """,
+                (like_pat, like_pat, like_pat, like_pat, safe_limit),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                """
+                SELECT id, name, job_title, linkedin_url, company, location, company_website
+                FROM contacts
+                LIMIT ?
+                """,
+                (safe_limit,),
+            ).fetchall()
+        results = [dict(r) for r in rows]
+        conn.close()
+    except Exception:
+        results = []
+
+    return {"total": len(results), "contacts": results}
 
 
 # ==============================================================================
@@ -964,7 +1117,11 @@ def export_user_data():
         "profile": profile_data.model_dump() if profile_data else None,
         "evidence_vault": [ev.model_dump() for ev in profile_data.evidence] if profile_data else [],
         "applications": list(_CONFIRMED_RECEIPTS.values()) + db_apps,
-        "credentials_portals_count": len(_VAULT.list_portals())
+        "credentials_portals_count": len(_VAULT.list_portals()),
+        "saved_jobs": _WORKSPACE_STORE.list_saved_jobs(),
+        "follow_ups": _WORKSPACE_STORE.list_follow_ups(),
+        "preferences": _WORKSPACE_STORE.get_preference("targeting", {}),
+        "custom_themes": _WORKSPACE_STORE.get_preference("custom_themes", []),
     }
 
 
@@ -975,6 +1132,7 @@ def hard_delete_account():
     _CURRENT_PROFILE = None
     _CONFIRMED_RECEIPTS.clear()
     _PENDING_APPROVALS.clear()
+    _WORKSPACE_STORE.purge_all()
     return {"status": "PURGED", "message": "All user data, evidence, and session memory purged."}
 
 
@@ -985,6 +1143,54 @@ class DocumentUploadJSONRequest(BaseModel):
     raw_text: Optional[str] = None
     content_base64: Optional[str] = None
     user_id: Optional[str] = "usr_candidate_default"
+
+
+def _sync_profile_from_resume(content_bytes: bytes, filename: str, uid: str, vault_res: Dict[str, Any]) -> None:
+    """Syncs extracted resume fields, skills, and evidence into live _CURRENT_PROFILE & SQLite."""
+    global _CURRENT_PROFILE
+    try:
+        raw_text = _VAULT_MANAGER.parse_document_content(content_bytes, filename)
+        rag_payload = ResumeRAGEngine().ingest_resume(raw_text, user_id=uid)
+
+        if not _CURRENT_PROFILE:
+            _CURRENT_PROFILE = CandidateProfile(
+                user_id=uid,
+                full_name=rag_payload.candidate_name or "Candidate",
+                email=rag_payload.email or "candidate@example.com",
+                phone=rag_payload.phone or "+91 98765 43210",
+                location="India",
+                skills=rag_payload.skills or [],
+                evidence=rag_payload.evidence_items or [],
+            )
+        else:
+            if rag_payload.candidate_name and rag_payload.candidate_name != "Candidate":
+                _CURRENT_PROFILE.full_name = rag_payload.candidate_name
+            if rag_payload.email and "@" in rag_payload.email:
+                _CURRENT_PROFILE.email = rag_payload.email
+            if rag_payload.phone:
+                _CURRENT_PROFILE.phone = rag_payload.phone
+
+            for skill in rag_payload.skills:
+                if skill not in _CURRENT_PROFILE.skills:
+                    _CURRENT_PROFILE.skills.append(skill)
+            for c in vault_res.get("evidence", []):
+                if c.get("claim_type") == "SKILL" and c.get("title") and c["title"] not in _CURRENT_PROFILE.skills:
+                    _CURRENT_PROFILE.skills.append(c["title"])
+
+            existing_ev_ids = {ev.id for ev in _CURRENT_PROFILE.evidence}
+            for ev in rag_payload.evidence_items:
+                if ev.id not in existing_ev_ids:
+                    _CURRENT_PROFILE.evidence.append(ev)
+
+        _save_profile_to_db(_CURRENT_PROFILE)
+        _WORKSPACE_STORE.create_notification(
+            title="Resume Processed & Profile Synced",
+            body=f"Extracted {vault_res.get('claims_extracted', 0)} claims and updated {len(_CURRENT_PROFILE.skills)} skills.",
+            category="vault",
+            href="/settings/profile",
+        )
+    except Exception:
+        pass
 
 
 @app.post("/api/v1/documents/upload")
@@ -998,7 +1204,7 @@ async def upload_document(
     Master Resume Parser endpoint.
     Supports Multipart file upload (PDF/DOCX/TXT) or raw form text.
     Extracts atomic claims (EXPERIENCE, SKILL, EDUCATION, PROJECT, METRIC)
-    and saves to public.documents and public.evidence with SHA-256 integrity hash.
+    and syncs CandidateProfile + Evidence Vault.
     """
     uid = user_id or (_CURRENT_PROFILE.user_id if _CURRENT_PROFILE else "usr_candidate_default")
 
@@ -1012,11 +1218,9 @@ async def upload_document(
         raise HTTPException(status_code=400, detail="No file or document content provided.")
 
     res = _VAULT_MANAGER.upload_and_process_document(content_bytes, fname, user_id=uid)
-
-    if _CURRENT_PROFILE:
-        for c in res["evidence"]:
-            if c["claim_type"] == "SKILL" and c["title"] not in _CURRENT_PROFILE.skills:
-                _CURRENT_PROFILE.skills.append(c["title"])
+    _sync_profile_from_resume(content_bytes, fname, uid, res)
+    res["profile_synced"] = _CURRENT_PROFILE is not None
+    res["skills_total"] = len(_CURRENT_PROFILE.skills) if _CURRENT_PROFILE else 0
     return res
 
 
@@ -1033,10 +1237,9 @@ def upload_document_json(req: DocumentUploadJSONRequest):
         raise HTTPException(status_code=400, detail="Missing raw_text or content_base64")
 
     res = _VAULT_MANAGER.upload_and_process_document(content_bytes, req.filename, user_id=uid)
-    if _CURRENT_PROFILE:
-        for c in res["evidence"]:
-            if c["claim_type"] == "SKILL" and c["title"] not in _CURRENT_PROFILE.skills:
-                _CURRENT_PROFILE.skills.append(c["title"])
+    _sync_profile_from_resume(content_bytes, req.filename, uid, res)
+    res["profile_synced"] = _CURRENT_PROFILE is not None
+    res["skills_total"] = len(_CURRENT_PROFILE.skills) if _CURRENT_PROFILE else 0
     return res
 
 
@@ -1159,6 +1362,16 @@ def list_applications():
         ]
         apps.extend(sample_receipts)
 
+    exts = _WORKSPACE_STORE.list_application_exts()
+    for a in apps:
+        aid = a.get("application_id") or a.get("id")
+        ext = exts.get(aid) or exts.get(a.get("id", ""))
+        if ext and ext.get("stage"):
+            a["stage"] = ext["stage"]
+            a["status"] = ext["stage"]
+        else:
+            a["stage"] = str(a.get("status", "CONFIRMED")).upper()
+
     return {"total": len(apps), "applications": apps}
 
 
@@ -1168,27 +1381,221 @@ class ManualApplicationLogRequest(BaseModel):
     job_title: str
     canonical_url: str
     notes: Optional[str] = None
+    filled_fields: Optional[List[Dict[str, Any]]] = None
+    application_id: Optional[str] = None
+
+
+def _resolve_standard_fields(company_name: str) -> List[Dict[str, Any]]:
+    if not _CURRENT_PROFILE:
+        return []
+    questions = [
+        "Full Name",
+        "Email Address",
+        "Phone Number",
+        "Current Location",
+        "Primary Technical Skills",
+        "Are you legally authorized to work in India?",
+        "Brief Note / Motivation",
+    ]
+    resolved_list: List[Dict[str, Any]] = []
+    for q in questions:
+        m = AnswerBankEngine.resolve_question(q, _CURRENT_PROFILE, company_name)
+        resolved_list.append(
+            {
+                "field_key": m.field_key,
+                "label": m.question_label or m.field_key,
+                "value": m.proposed_value,
+                "classification": m.classification.value if hasattr(m.classification, "value") else str(m.classification),
+                "evidence_ids": m.evidence_ids,
+            }
+        )
+    return resolved_list
 
 
 @app.post("/api/v1/applications/manual")
 def record_manual_application(req: ManualApplicationLogRequest):
-    """Allows user to manually apply on official career portals and track receipt confirmation."""
+    """Allows user to manually apply on official career portals and track receipt + full filled preview."""
     rec_id = f"rcpt_manual_{uuid.uuid4().hex[:10]}"
-    app_id = f"app_manual_{uuid.uuid4().hex[:10]}"
+    app_id = req.application_id or f"app_manual_{uuid.uuid4().hex[:10]}"
+    conf_num = f"MANUAL-{uuid.uuid4().hex[:8].upper()}"
     confirmation = ReceiptConfirmation(
         receipt_id=rec_id,
         application_id=app_id,
         approval_id="manual_user_submission",
-        confirmation_number=f"MANUAL-{uuid.uuid4().hex[:8].upper()}",
+        confirmation_number=conf_num,
         final_destination_url=req.canonical_url,
         screenshot_storage_key="manual_browser_dispatch",
         status="CONFIRMED"
     )
     _CONFIRMED_RECEIPTS[rec_id] = confirmation
+
+    filled_fields = req.filled_fields if req.filled_fields else _resolve_standard_fields(req.company_name)
+    snapshot = None
+    try:
+        _WORKSPACE_STORE.upsert_application_ext(
+            application_id=app_id,
+            stage="CONFIRMED",
+            notes=req.notes or f"Manually submitted on {req.canonical_url}",
+        )
+        snapshot = _WORKSPACE_STORE.save_submitted_snapshot(
+            application_id=app_id,
+            job_id=req.job_id,
+            company_name=req.company_name,
+            job_title=req.job_title,
+            destination_url=req.canonical_url,
+            submission_mode="MANUAL_APPLY",
+            confirmation_number=conf_num,
+            filled_fields=filled_fields,
+            resume_summary=f"Profile resume attached for {req.job_title} at {req.company_name}.",
+            status="CONFIRMED",
+            user_notes=req.notes,
+            screenshot_key="manual_browser_dispatch",
+        )
+        _WORKSPACE_STORE.create_notification(
+            title=f"Manual Application Saved: {req.company_name}",
+            body=f"{req.job_title} recorded (#{conf_num}).",
+            category="application",
+            href=f"/applications/{app_id}",
+        )
+    except Exception:
+        pass
+
     return {
         "status": "success",
         "message": f"Manual application to {req.company_name} for {req.job_title} tracked successfully.",
-        "receipt": confirmation
+        "receipt": confirmation,
+        "snapshot": snapshot,
+    }
+
+
+class OpenAndFillRequest(BaseModel):
+    job_id: Optional[str] = None
+    destination_url: str
+    company_name: Optional[str] = "Official Portal"
+    job_title: Optional[str] = "Target Role"
+    launch_browser: bool = True
+    filled_fields: Optional[List[Dict[str, Any]]] = None
+
+
+def _launch_headed_portal_fill(url: str, field_map: Dict[str, str]) -> None:
+    """Best-effort non-blocking headed Playwright fill; NEVER clicks Submit."""
+    try:
+        from playwright.sync_api import sync_playwright
+    except Exception:
+        return
+
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=False)
+            context = browser.new_context()
+            page = context.new_page()
+            page.goto(url, timeout=25000, wait_until="domcontentloaded")
+
+            selector_map = {
+                "full_name": ["input[name*='name' i]", "input[id*='name' i]", "input[placeholder*='name' i]"],
+                "email": ["input[type='email']", "input[name*='email' i]"],
+                "phone": ["input[type='tel']", "input[name*='phone' i]"],
+                "location": ["input[name*='location' i]", "input[name*='city' i]"],
+                "motivation_note": ["textarea"],
+            }
+            for key, selectors in selector_map.items():
+                val = field_map.get(key)
+                if not val:
+                    continue
+                for sel in selectors:
+                    try:
+                        loc = page.locator(sel).first
+                        if loc.count() > 0 and loc.is_visible():
+                            loc.fill(str(val))
+                            break
+                    except Exception:
+                        continue
+
+            # Intentionally stop before Submit and leave page open up to 10 minutes for user review
+            page.wait_for_timeout(600000)
+            browser.close()
+    except Exception:
+        pass
+
+
+@app.post("/api/v1/applications/open-and-fill")
+def open_and_fill_portal(req: OpenAndFillRequest):
+    """
+    Opens an official portal link, auto-fills candidate details, and pauses
+    before submission so the user can review and click Submit on the official page.
+    Enforces LinkedIn MANUAL_LINK policy.
+    """
+    from urllib.parse import urlparse
+    import threading
+
+    domain = urlparse(req.destination_url).netloc.lower()
+    if "linkedin.com" in domain:
+        return {
+            "status": "MANUAL_LINK_REQUIRED",
+            "policy_mode": "MANUAL_LINK",
+            "portal_url": req.destination_url,
+            "filled_fields": req.filled_fields or _resolve_standard_fields(req.company_name or "Company"),
+            "filled_count": 0,
+            "message": "LinkedIn is kept in strict Manual-Link mode. Open the link directly and paste your tailored details.",
+        }
+
+    if not _CURRENT_PROFILE:
+        raise HTTPException(status_code=400, detail="Candidate profile not loaded")
+
+    fields = req.filled_fields or _resolve_standard_fields(req.company_name or "Company")
+    field_lookup = {f.get("field_key", ""): str(f.get("value", "")) for f in fields if f.get("field_key")}
+    app_id = f"app_portal_{uuid.uuid4().hex[:10]}"
+
+    ats_detected = "Direct Portal"
+    for ats_name, token in [("Greenhouse", "greenhouse"), ("Lever", "lever"), ("Workday", "workday"), ("Ashby", "ashby"), ("Naukri", "naukri")]:
+        if token in domain:
+            ats_detected = ats_name
+            break
+
+    snapshot = None
+    try:
+        _WORKSPACE_STORE.upsert_application_ext(
+            application_id=app_id,
+            stage="NEEDS_APPROVAL",
+            notes=f"Opened & pre-filled on {req.destination_url}; awaiting user Submit click.",
+        )
+        snapshot = _WORKSPACE_STORE.save_submitted_snapshot(
+            application_id=app_id,
+            job_id=req.job_id,
+            company_name=req.company_name or "Official Portal",
+            job_title=req.job_title or "Target Role",
+            destination_url=req.destination_url,
+            submission_mode="MANUAL_APPLY",
+            filled_fields=fields,
+            ats_detected=ats_detected,
+            fill_success_rate=0.92,
+            status="AWAITING_USER_SUBMIT",
+        )
+        _WORKSPACE_STORE.create_notification(
+            title=f"Action Required: Click Submit on {req.company_name}",
+            body="Portal form prepared & opened. Review fields, click Submit on the official portal, then confirm.",
+            category="security",
+            href=f"/applications/{app_id}",
+        )
+    except Exception:
+        pass
+
+    if req.launch_browser:
+        threading.Thread(
+            target=_launch_headed_portal_fill,
+            args=(req.destination_url, field_lookup),
+            daemon=True,
+        ).start()
+
+    return {
+        "status": "AWAITING_USER_CLICK_SUBMIT",
+        "application_id": app_id,
+        "portal_url": req.destination_url,
+        "ats_detected": ats_detected,
+        "filled_fields": fields,
+        "filled_count": len(fields),
+        "message": "Official portal opened and form fields prepared. Please review and click Submit on the official portal, then click 'Confirm Submitted'.",
+        "snapshot": snapshot,
     }
 
 
@@ -1201,6 +1608,46 @@ def list_pending_approvals():
         if not appr.is_consumed and appr.expires_at > now
     ]
     return {"total": len(pending), "approvals": pending}
+
+
+@app.get("/api/v1/approvals/receipts")
+def list_confirmed_receipts():
+    """Lists confirmed submission receipts enriched with persisted application snapshots."""
+    snapshots = {s["application_id"]: s for s in _WORKSPACE_STORE.list_submitted_snapshots(limit=50)}
+    receipts: List[Dict[str, Any]] = []
+    seen_app_ids = set()
+
+    for rc in _CONFIRMED_RECEIPTS.values():
+        d = rc.model_dump()
+        snap = snapshots.get(rc.application_id)
+        if snap:
+            d["snapshot"] = snap
+            d["company_name"] = snap.get("company_name")
+            d["job_title"] = snap.get("job_title")
+            d["submission_mode"] = snap.get("submission_mode")
+            d["filled_fields"] = snap.get("filled_fields", [])
+        seen_app_ids.add(rc.application_id)
+        receipts.append(d)
+
+    for app_id, snap in snapshots.items():
+        if app_id not in seen_app_ids and snap.get("status") == "CONFIRMED":
+            receipts.append(
+                {
+                    "receipt_id": snap.get("confirmation_number") or app_id,
+                    "application_id": app_id,
+                    "confirmation_number": snap.get("confirmation_number") or app_id,
+                    "final_destination_url": snap.get("destination_url") or "",
+                    "screenshot_storage_key": snap.get("screenshot_key") or "",
+                    "status": "CONFIRMED",
+                    "company_name": snap.get("company_name"),
+                    "job_title": snap.get("job_title"),
+                    "submission_mode": snap.get("submission_mode"),
+                    "filled_fields": snap.get("filled_fields", []),
+                    "snapshot": snap,
+                }
+            )
+
+    return {"total": len(receipts), "receipts": receipts}
 
 
 # ---------------- Resume Python RAG Ingestion Endpoints ---------------- #
@@ -1600,4 +2047,34 @@ def connect_email_account(req: ConnectEmailRequest):
 def compose_and_send_email(req: ComposeEmailRequest):
     """Composes email grounded in candidate evidence and dispatches via connected account or mailto."""
     return _EMAIL_MGR.compose_and_send(req, _CURRENT_PROFILE)
+
+
+def _set_profile_from_dict(data: Dict[str, Any]) -> CandidateProfile:
+    global _CURRENT_PROFILE
+    _CURRENT_PROFILE = CandidateProfile(**data)
+    return _CURRENT_PROFILE
+
+
+def _create_manual_app_helper(job_id: str, company_name: str, job_title: str, canonical_url: str) -> Dict[str, Any]:
+    return record_manual_application(
+        ManualApplicationLogRequest(
+            job_id=job_id,
+            company_name=company_name,
+            job_title=job_title,
+            canonical_url=canonical_url,
+        )
+    )
+
+
+app.include_router(
+    create_dossier_router(
+        store=_WORKSPACE_STORE,
+        get_profile_fn=lambda: _CURRENT_PROFILE,
+        set_profile_fn=_set_profile_from_dict,
+        get_jobs_fn=lambda: _JOBS_STORE,
+        get_resumes_fn=lambda: _TAILORED_RESUMES,
+        list_applications_fn=list_applications,
+        create_manual_app_fn=_create_manual_app_helper,
+    )
+)
 

@@ -173,7 +173,7 @@ class RenderCVCompiler:
             f"\\address{{{profile.location or 'Pune, India'}}}{{}}",
             f"\\phone[mobile]{{{profile.phone or '+91 98765 43210'}}}",
             f"\\email{{{profile.email}}}",
-            f"\\social[linkedin]{{ayush-narkhede}}",
+            f"\\social[linkedin]{{alex-rivera}}",
             f"\\social[github]{{ayush0121n}}",
             "",
             r"\begin{document}",

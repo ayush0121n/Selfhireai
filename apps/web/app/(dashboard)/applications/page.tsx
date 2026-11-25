@@ -24,9 +24,11 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 
 interface ApplicationRecord {
   id: string;
+  application_id?: string;
   receipt_id?: string;
   approval_id?: string;
   status: string;
+  stage?: string;
   destination_url: string;
   confirmation_number?: string;
   payload_hash?: string;
@@ -43,11 +45,34 @@ export default function ApplicationsPage() {
   const [loading, setLoading] = useState(true);
 
   const stages = [
-    { id: "PREPARED", label: "Prepared" },
+    { id: "PREPARED", label: "Prepared / Draft" },
     { id: "NEEDS_APPROVAL", label: "Needs Approval" },
-    { id: "CONFIRMED", label: "Confirmed / Submitted" },
+    { id: "CONFIRMED", label: "Confirmed / Applied" },
     { id: "INTERVIEW", label: "Interview" },
+    { id: "OFFER", label: "Offer" },
+    { id: "ARCHIVED", label: "Archived" },
   ];
+
+  const moveStage = async (appId: string, newStage: string) => {
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/applications/${encodeURIComponent(appId)}/stage`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ stage: newStage }),
+      });
+      if (res.ok) {
+        setApplications((prev) =>
+          prev.map((a) =>
+            (a.application_id || a.id) === appId || a.id === appId
+              ? { ...a, status: newStage, stage: newStage }
+              : a
+          )
+        );
+      }
+    } catch (err) {
+      console.error("Failed to move stage:", err);
+    }
+  };
 
   useEffect(() => {
     fetchApplications();
@@ -150,7 +175,7 @@ export default function ApplicationsPage() {
 
       {/* Kanban Board View */}
       {applications.length > 0 && viewMode === "kanban" && (
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 overflow-x-auto pb-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-6 gap-4 overflow-x-auto pb-4">
           {stages.map((stage) => {
             const stageApps = applications.filter((a) => a.status === stage.id);
             return (
@@ -187,12 +212,23 @@ export default function ApplicationsPage() {
                         {app.destination_url}
                       </div>
 
-                      <div className="pt-2 border-t border-[#6E250A]/10 flex items-center justify-between text-[11px]">
-                        <span className="text-[#2D0E03]/60 font-mono text-[9px] truncate max-w-[120px]">
-                          {app.confirmation_number || app.payload_hash || app.approval_id}
-                        </span>
-                        <Link href="/approvals" className="text-[#B34A0E] font-semibold hover:underline">
-                          Review
+                      <div className="pt-2 border-t border-[#6E250A]/10 flex items-center justify-between gap-2 text-[11px]">
+                        <select
+                          value={app.status}
+                          onChange={(e) => moveStage(app.application_id || app.id, e.target.value)}
+                          className="text-[10px] px-1.5 py-0.5 rounded bg-[#FEF5E7] border border-[#6E250A]/15 text-[#2D0E03]"
+                        >
+                          {stages.map((s) => (
+                            <option key={s.id} value={s.id}>
+                              {s.label}
+                            </option>
+                          ))}
+                        </select>
+                        <Link
+                          href={`/applications/${encodeURIComponent(app.application_id || app.id)}`}
+                          className="text-[#B34A0E] font-semibold hover:underline whitespace-nowrap"
+                        >
+                          Open Dossier
                         </Link>
                       </div>
                     </Card>
@@ -244,9 +280,9 @@ export default function ApplicationsPage() {
                     {app.confirmation_number || app.payload_hash || "Awaiting Decision"}
                   </td>
                   <td className="py-4 px-6 text-right">
-                    <Link href="/approvals">
+                    <Link href={`/applications/${encodeURIComponent(app.application_id || app.id)}`}>
                       <Button variant="ghost" size="sm" className="text-xs text-[#B34A0E]">
-                        Review
+                        Open Dossier
                       </Button>
                     </Link>
                   </td>

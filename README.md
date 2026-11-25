@@ -75,8 +75,8 @@ cd apps/web && npm run dev
 # 3. Start Distributed Background Worker
 python -m services.worker.runner
 
-# 4. Run Full Verification Test Suite (71/71 tests passing)
-python -m pytest tests/unit/ -v
+# 4. Run Full Verification Test Suite (89/89 tests passing)
+python -m pytest -q
 ```
 
 ---

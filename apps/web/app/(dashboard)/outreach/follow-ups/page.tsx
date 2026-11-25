@@ -1,24 +1,19 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
-  CalendarClock,
-  Mail,
-  Send,
   CheckCircle2,
-  Clock,
-  AlertCircle,
   Copy,
-  ExternalLink,
   Search,
-  Filter,
-  Sparkles,
-  ChevronRight,
-  MessageSquare,
+  Send,
+  Plus,
+  RefreshCw,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 
 interface FollowUpItem {
   id: string;
@@ -26,85 +21,47 @@ interface FollowUpItem {
   recruiter_title: string;
   company: string;
   role: string;
-  channel: "Email" | "LinkedIn";
+  channel: string;
   initial_sent_date: string;
-  stage: "Day 3 Bump" | "Day 7 Value-Add" | "Day 14 Final Check";
-  due_status: "DUE_TODAY" | "SCHEDULED" | "REPLIED" | "EXPIRED";
+  stage: string;
+  due_status: string;
   suggested_subject: string;
   suggested_body: string;
 }
 
-const INITIAL_FOLLOW_UPS: FollowUpItem[] = [
-  {
-    id: "fu-01",
-    recruiter_name: "Sarah Jenkins",
-    recruiter_title: "Staff Technical Recruiter",
-    company: "Stripe",
-    role: "Senior Full Stack Engineer",
-    channel: "Email",
-    initial_sent_date: "2026-11-16",
-    stage: "Day 7 Value-Add",
-    due_status: "DUE_TODAY",
-    suggested_subject: "Re: Senior Full Stack role at Stripe — recent distributed caching benchmark",
-    suggested_body:
-      "Hi Sarah,\n\nFollowing up on my note last week regarding Stripe's engineering openings. I recently read about Stripe's infrastructure scaling challenges and wanted to share how I optimized Redis worker pools to cut webhook latency by 42% at scale.\n\nWould love 10 minutes to connect if this aligns with the team's Q4 roadmap!\n\nBest,\nAyush Narkhede",
-  },
-  {
-    id: "fu-02",
-    recruiter_name: "David Chen",
-    recruiter_title: "Head of Talent",
-    company: "Acme Corp",
-    role: "Lead Python / Backend Engineer",
-    channel: "LinkedIn",
-    initial_sent_date: "2026-11-20",
-    stage: "Day 3 Bump",
-    due_status: "SCHEDULED",
-    suggested_subject: "Quick bump — Lead Python Engineer position",
-    suggested_body:
-      "Hi David, quick follow-up to check if my background in high-throughput FastAPI services caught your team's interest. Happy to share our technical case studies!",
-  },
-  {
-    id: "fu-03",
-    recruiter_name: "Priya Sharma",
-    recruiter_title: "Principal Recruiter",
-    company: "Razorpay",
-    role: "Staff Platform Engineer",
-    channel: "Email",
-    initial_sent_date: "2026-11-09",
-    stage: "Day 14 Final Check",
-    due_status: "DUE_TODAY",
-    suggested_subject: "Closing the loop — Staff Platform Engineer at Razorpay",
-    suggested_body:
-      "Hi Priya,\n\nI understand your schedule is tight. I am closing the loop on my application for the Staff Platform Engineer role. If the headcount is filled, no worries at all — I'd be glad to stay in touch for future platform initiatives.\n\nWarm regards,\nAyush",
-  },
-  {
-    id: "fu-04",
-    recruiter_name: "Marcus Vance",
-    recruiter_title: "VP of Engineering",
-    company: "CloudScale Systems",
-    role: "Senior Distributed Systems Engineer",
-    channel: "Email",
-    initial_sent_date: "2026-11-18",
-    stage: "Day 3 Bump",
-    due_status: "REPLIED",
-    suggested_subject: "Re: Distributed systems opening",
-    suggested_body: "Candidate received recruiter interview invitation on Nov 21.",
-  },
-];
-
 export default function FollowUpsPage() {
-  const [items, setItems] = useState<FollowUpItem[]>(INITIAL_FOLLOW_UPS);
+  const [items, setItems] = useState<FollowUpItem[]>([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [activeFilter, setActiveFilter] = useState<"ALL" | "DUE" | "REPLIED">("ALL");
-  const [selectedItem, setSelectedItem] = useState<FollowUpItem | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [showAdd, setShowAdd] = useState(false);
+  const [newRecruiter, setNewRecruiter] = useState("");
+  const [newCompany, setNewCompany] = useState("");
+  const [newRole, setNewRole] = useState("");
+
+  const loadFollowUps = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/outreach/follow-ups`);
+      if (res.ok) {
+        const data = await res.json();
+        setItems(data.follow_ups || []);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadFollowUps();
+  }, []);
 
   const filteredItems = items.filter((item) => {
     const matchesSearch =
       item.recruiter_name.toLowerCase().includes(search.toLowerCase()) ||
       item.company.toLowerCase().includes(search.toLowerCase()) ||
       item.role.toLowerCase().includes(search.toLowerCase());
-
     if (!matchesSearch) return false;
     if (activeFilter === "DUE") return item.due_status === "DUE_TODAY";
     if (activeFilter === "REPLIED") return item.due_status === "REPLIED";
@@ -118,281 +75,197 @@ export default function FollowUpsPage() {
     setTimeout(() => setCopiedId(null), 2500);
   };
 
-  const handleMarkReplied = (id: string) => {
-    setItems((prev) =>
-      prev.map((it) => (it.id === id ? { ...it, due_status: "REPLIED" } : it))
-    );
+  const updateStatus = async (id: string, due_status: string) => {
+    const res = await fetch(`${API_BASE}/api/v1/outreach/follow-ups/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ due_status }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      setItems((prev) => prev.map((it) => (it.id === id ? data.follow_up : it)));
+    }
+  };
+
+  const handleCreate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newRecruiter.trim() || !newCompany.trim()) return;
+    const res = await fetch(`${API_BASE}/api/v1/outreach/follow-ups`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        recruiter_name: newRecruiter.trim(),
+        company: newCompany.trim(),
+        role: newRole.trim() || "Software Engineer",
+        channel: "Email",
+        stage: "Day 3 Bump",
+        suggested_subject: `Following up — ${newRole.trim() || "Software Engineer"} at ${newCompany.trim()}`,
+        suggested_body: `Hi ${newRecruiter.trim()},\n\nFollowing up on my application for the ${newRole.trim() || "Software Engineer"} role at ${newCompany.trim()}. Happy to share any additional details!`,
+      }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      setItems((prev) => [data.follow_up, ...prev]);
+      setNewRecruiter("");
+      setNewCompany("");
+      setNewRole("");
+      setShowAdd(false);
+    }
   };
 
   return (
     <div className="space-y-6">
-      {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2 mb-1">
-            <h1 className="font-display text-4xl font-bold tracking-tight text-[#2D0E03]">
-              Smart Follow-up Intelligence
-            </h1>
-            <Badge variant="terracotta" className="text-xs">
-              Cadence Active
-            </Badge>
-          </div>
-          <p className="text-sm text-[#2D0E03]/70 font-sans">
-            Automated Day 3, Day 7, and Day 14 follow-up reminders. Verified with Google XYZ evidence citations to maximize recruiter response rates.
+          <h1 className="font-display text-4xl font-bold tracking-tight text-[#2D0E03]">
+            Outreach Follow-ups CRM
+          </h1>
+          <p className="text-sm text-[#2D0E03]/70 font-sans mt-1">
+            SQLite-persisted Day 3 / Day 7 / Day 14 recruiter follow-up queue. Zero automated spam.
           </p>
         </div>
-
         <div className="flex items-center gap-2">
-          <Badge variant="peach" className="px-3 py-1 font-semibold text-xs">
-            Response Rate: 38.4%
-          </Badge>
+          <Button variant="outline" size="sm" onClick={loadFollowUps} className="text-xs gap-1.5">
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
+            Refresh
+          </Button>
+          <Button variant="primary" size="sm" onClick={() => setShowAdd(!showAdd)} className="text-xs gap-1.5">
+            <Plus className="w-3.5 h-3.5" /> Add Follow-up
+          </Button>
         </div>
       </div>
 
-      {/* Cadence Timeline Overview */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card className="p-4 border-l-4 border-l-[#B34A0E]">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-bold uppercase tracking-wider text-[#2D0E03]/60 font-sans">
-              Day 3: Polite Bump
-            </span>
-            <Clock className="w-4 h-4 text-[#B34A0E]" />
-          </div>
-          <div className="text-2xl font-bold font-display text-[#2D0E03]">
-            {items.filter((i) => i.stage === "Day 3 Bump").length} Queued
-          </div>
-          <p className="text-[11px] text-[#2D0E03]/60 mt-1">
-            Short 2-sentence note to bring initial outreach back to the top of inbox.
-          </p>
+      {showAdd && (
+        <Card className="p-5">
+          <form onSubmit={handleCreate} className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
+            <div>
+              <label className="text-xs font-semibold text-[#2D0E03]">Recruiter Name</label>
+              <input
+                required
+                value={newRecruiter}
+                onChange={(e) => setNewRecruiter(e.target.value)}
+                placeholder="e.g. Maya Lin"
+                className="w-full mt-1 px-3 py-2 text-xs rounded-[8px] bg-[#FEF5E7] border border-[#6E250A]/15"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-[#2D0E03]">Company</label>
+              <input
+                required
+                value={newCompany}
+                onChange={(e) => setNewCompany(e.target.value)}
+                placeholder="e.g. Meridian AI"
+                className="w-full mt-1 px-3 py-2 text-xs rounded-[8px] bg-[#FEF5E7] border border-[#6E250A]/15"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-[#2D0E03]">Role</label>
+              <input
+                value={newRole}
+                onChange={(e) => setNewRole(e.target.value)}
+                placeholder="e.g. Backend Engineer"
+                className="w-full mt-1 px-3 py-2 text-xs rounded-[8px] bg-[#FEF5E7] border border-[#6E250A]/15"
+              />
+            </div>
+            <Button type="submit" variant="primary" size="sm" className="text-xs">
+              Save Follow-up
+            </Button>
+          </form>
         </Card>
+      )}
 
-        <Card className="p-4 border-l-4 border-l-[#E67E22]">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-bold uppercase tracking-wider text-[#2D0E03]/60 font-sans">
-              Day 7: Value-Add Insight
-            </span>
-            <Sparkles className="w-4 h-4 text-[#E67E22]" />
-          </div>
-          <div className="text-2xl font-bold font-display text-[#2D0E03]">
-            {items.filter((i) => i.stage === "Day 7 Value-Add").length} Active
-          </div>
-          <p className="text-[11px] text-[#2D0E03]/60 mt-1">
-            Shares a relevant technical artifact or benchmark matching company pain points.
-          </p>
-        </Card>
-
-        <Card className="p-4 border-l-4 border-l-emerald-600">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-bold uppercase tracking-wider text-[#2D0E03]/60 font-sans">
-              Day 14: Graceful Closure
-            </span>
-            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-          </div>
-          <div className="text-2xl font-bold font-display text-[#2D0E03]">
-            {items.filter((i) => i.stage === "Day 14 Final Check").length} Pending
-          </div>
-          <p className="text-[11px] text-[#2D0E03]/60 mt-1">
-            Polite closing loop leaving the door open for future strategic hiring.
-          </p>
-        </Card>
+      <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between">
+        <div className="relative flex-1 max-w-md">
+          <Search className="w-4 h-4 text-[#2D0E03]/40 absolute left-3 top-1/2 -translate-y-1/2" />
+          <input
+            type="text"
+            placeholder="Search by recruiter, company, or role..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full pl-9 pr-3 py-2 text-xs rounded-[10px] bg-white border border-[#6E250A]/15"
+          />
+        </div>
+        <div className="flex gap-1.5">
+          {(["ALL", "DUE", "REPLIED"] as const).map((f) => (
+            <button
+              key={f}
+              type="button"
+              onClick={() => setActiveFilter(f)}
+              className={`px-3 py-1.5 rounded-[8px] text-xs font-semibold border ${
+                activeFilter === f
+                  ? "bg-[#B34A0E] text-white border-transparent"
+                  : "bg-white text-[#2D0E03]/70 border-[#6E250A]/15"
+              }`}
+            >
+              {f === "ALL" ? "All" : f === "DUE" ? "Due Today" : "Replied"}
+            </button>
+          ))}
+        </div>
       </div>
 
-      {/* Main Table & Filter Controls */}
-      <Card className="overflow-hidden">
-        <div className="p-4 px-6 border-b border-[#6E250A]/10 bg-[#FEF5E7]/50 flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <Button
-              variant={activeFilter === "ALL" ? "primary" : "outline"}
-              size="sm"
-              onClick={() => setActiveFilter("ALL")}
-              className="text-xs"
-            >
-              All Outreaches ({items.length})
-            </Button>
-            <Button
-              variant={activeFilter === "DUE" ? "primary" : "outline"}
-              size="sm"
-              onClick={() => setActiveFilter("DUE")}
-              className="text-xs"
-            >
-              Due Today ({items.filter((i) => i.due_status === "DUE_TODAY").length})
-            </Button>
-            <Button
-              variant={activeFilter === "REPLIED" ? "primary" : "outline"}
-              size="sm"
-              onClick={() => setActiveFilter("REPLIED")}
-              className="text-xs"
-            >
-              Replied ({items.filter((i) => i.due_status === "REPLIED").length})
-            </Button>
-          </div>
-
-          <div className="relative w-72">
-            <Search className="w-4 h-4 text-[#2D0E03]/40 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              placeholder="Search by recruiter or company..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-9 pr-3 py-1.5 text-xs rounded-[10px] bg-white border border-[#6E250A]/15 text-[#2D0E03] placeholder-[#2D0E03]/40 focus:outline-none focus:ring-1 focus:ring-[#B34A0E]"
-            />
-          </div>
-        </div>
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead className="bg-[#FEF5E7] text-[#2D0E03]/70 uppercase text-[10px] font-bold border-b border-[#6E250A]/10">
-              <tr>
-                <th className="py-3.5 px-6">Recruiter & Company</th>
-                <th className="py-3.5 px-6">Target Role</th>
-                <th className="py-3.5 px-6">Cadence Stage</th>
-                <th className="py-3.5 px-6">Status</th>
-                <th className="py-3.5 px-6 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[#6E250A]/10">
-              {filteredItems.map((item) => (
-                <tr key={item.id} className="hover:bg-[#FEF5E7]/30 transition-colors">
-                  <td className="py-3.5 px-6">
-                    <div className="font-semibold text-[#2D0E03]">
-                      {item.recruiter_name}
-                    </div>
-                    <div className="text-[11px] text-[#2D0E03]/60">
-                      {item.recruiter_title} • <span className="font-medium text-[#B34A0E]">{item.company}</span>
-                    </div>
-                  </td>
-                  <td className="py-3.5 px-6 font-medium text-[#2D0E03]">
-                    {item.role}
-                    <div className="text-[10px] text-[#2D0E03]/50">
-                      via {item.channel} ({item.initial_sent_date})
-                    </div>
-                  </td>
-                  <td className="py-3.5 px-6">
-                    <Badge variant="peach" className="text-[10px] font-mono">
-                      {item.stage}
-                    </Badge>
-                  </td>
-                  <td className="py-3.5 px-6">
-                    {item.due_status === "DUE_TODAY" && (
-                      <span className="inline-flex items-center gap-1.5 text-[#B34A0E] font-bold text-[11px]">
-                        <span className="w-2 h-2 rounded-full bg-[#B34A0E] animate-ping"></span>
-                        Due Today
-                      </span>
-                    )}
-                    {item.due_status === "SCHEDULED" && (
-                      <span className="text-[#2D0E03]/60 font-medium text-[11px]">
-                        Scheduled
-                      </span>
-                    )}
-                    {item.due_status === "REPLIED" && (
-                      <span className="inline-flex items-center gap-1 text-emerald-700 font-bold text-[11px]">
-                        <CheckCircle2 className="w-3.5 h-3.5" />
-                        Replied
-                      </span>
-                    )}
-                  </td>
-                  <td className="py-3.5 px-6 text-right space-x-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setSelectedItem(item)}
-                      className="text-xs py-1 px-2.5"
-                    >
-                      View Draft
-                    </Button>
-                    <Button
-                      variant="primary"
-                      size="sm"
-                      onClick={() => handleCopyDraft(item)}
-                      className="text-xs py-1 px-2.5 gap-1"
-                    >
-                      <Copy className="w-3 h-3" />
-                      {copiedId === item.id ? "Copied!" : "Copy"}
-                    </Button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Card>
-
-      {/* Draft Modal / Detail Viewer */}
-      {selectedItem && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <Card className="max-w-xl w-full p-6 space-y-4 shadow-xl">
-            <div className="flex items-center justify-between border-b border-[#6E250A]/10 pb-3">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        {filteredItems.map((item) => (
+          <Card key={item.id} className="p-5 space-y-3">
+            <div className="flex items-start justify-between gap-2">
               <div>
                 <h3 className="font-display text-lg font-bold text-[#2D0E03]">
-                  AI Generated Follow-up Draft
+                  {item.recruiter_name} • {item.company}
                 </h3>
-                <p className="text-xs text-[#2D0E03]/60">
-                  Targeted to {selectedItem.recruiter_name} at {selectedItem.company} ({selectedItem.stage})
-                </p>
+                <div className="text-xs text-[#2D0E03]/70">
+                  {item.role} ({item.stage} • {item.channel})
+                </div>
               </div>
-              <button
-                onClick={() => setSelectedItem(null)}
-                className="text-sm font-bold text-[#2D0E03]/50 hover:text-[#2D0E03]"
+              <Badge
+                variant={item.due_status === "REPLIED" ? "success" : "peach"}
+                className="text-[10px]"
               >
-                ✕
-              </button>
+                {item.due_status}
+              </Badge>
             </div>
 
-            <div className="space-y-3 text-xs">
-              <div>
-                <label className="font-semibold text-[#2D0E03] block mb-1">
-                  Subject Line:
-                </label>
-                <div className="p-2.5 rounded-[8px] bg-[#FEF5E7] border border-[#6E250A]/10 text-[#2D0E03] font-mono">
-                  {selectedItem.suggested_subject}
-                </div>
+            <div className="p-3 rounded-[10px] bg-[#FEF5E7]/60 border border-[#6E250A]/10 text-xs text-[#2D0E03]/80 whitespace-pre-line">
+              <div className="font-semibold text-[#2D0E03] mb-1">
+                Subject: {item.suggested_subject}
               </div>
-
-              <div>
-                <label className="font-semibold text-[#2D0E03] block mb-1">
-                  Message Body:
-                </label>
-                <div className="p-3 rounded-[8px] bg-[#FEF5E7] border border-[#6E250A]/10 text-[#2D0E03] whitespace-pre-wrap leading-relaxed">
-                  {selectedItem.suggested_body}
-                </div>
-              </div>
+              {item.suggested_body}
             </div>
 
-            <div className="flex items-center justify-between pt-3 border-t border-[#6E250A]/10">
+            <div className="flex items-center justify-between pt-2 border-t border-[#6E250A]/10">
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => {
-                  handleMarkReplied(selectedItem.id);
-                  setSelectedItem(null);
-                }}
-                className="text-xs text-emerald-800"
+                onClick={() => handleCopyDraft(item)}
+                className="text-xs gap-1"
               >
-                Mark as Replied
+                <Copy className="w-3.5 h-3.5" />
+                {copiedId === item.id ? "Copied!" : "Copy Draft"}
               </Button>
               <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setSelectedItem(null)}
-                  className="text-xs"
-                >
-                  Close
-                </Button>
-                <Button
-                  variant="primary"
-                  size="sm"
-                  onClick={() => handleCopyDraft(selectedItem)}
-                  className="text-xs gap-1.5"
-                >
-                  <Copy className="w-3.5 h-3.5" />
-                  {copiedId === selectedItem.id ? "Copied to Clipboard!" : "Copy Full Message"}
-                </Button>
+                {item.due_status !== "REPLIED" && (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => updateStatus(item.id, "REPLIED")}
+                    className="text-xs gap-1"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Mark Replied
+                  </Button>
+                )}
+                {item.due_status === "DUE_TODAY" && (
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={() => updateStatus(item.id, "SCHEDULED")}
+                    className="text-xs gap-1"
+                  >
+                    <Send className="w-3.5 h-3.5" /> Mark Sent
+                  </Button>
+                )}
               </div>
             </div>
           </Card>
-        </div>
-      )}
+        ))}
+      </div>
     </div>
   );
 }

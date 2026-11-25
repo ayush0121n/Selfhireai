@@ -28,11 +28,11 @@ def test_seed_database_execution(tmp_path):
     contacts_row = cur.fetchone()
     assert contacts_row[0] >= 1000
 
-    cur.execute("SELECT full_name, email FROM profiles WHERE user_id = 'usr_ayush_01'")
+    cur.execute("SELECT full_name, email FROM profiles WHERE user_id = 'usr_demo_01'")
     profile_row = cur.fetchone()
     assert profile_row is not None
-    assert profile_row[0] == "Ayush Narkhede"
-    assert profile_row[1] == "ayush.narkhede@example.com"
+    assert profile_row[0] == "Alex Rivera"
+    assert profile_row[1] == "alex.rivera@example.com"
 
     conn.close()
 

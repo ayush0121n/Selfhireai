@@ -1,12 +1,32 @@
 "use client";
 
-import React from "react";
-import { Puzzle, ShieldCheck, CheckCircle2, Download, ExternalLink, Zap } from "lucide-react";
+import React, { useEffect, useState } from "react";
+import { Puzzle, CheckCircle2, Download, Zap, Copy, Check } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+
 export default function ExtensionIntegrationPage() {
+  const [backendOnline, setBackendOnline] = useState<boolean | null>(null);
+  const [copiedPath, setCopiedPath] = useState(false);
+
+  useEffect(() => {
+    fetch(`${API_BASE}/api/v1/health`)
+      .then((res) => setBackendOnline(res.ok))
+      .catch(() => setBackendOnline(false));
+  }, []);
+
+  const handleCopyPath = async () => {
+    try {
+      await navigator.clipboard.writeText("apps/extension/dist");
+      setCopiedPath(true);
+      setTimeout(() => setCopiedPath(false), 2000);
+    } catch {
+      setCopiedPath(false);
+    }
+  };
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -73,18 +93,21 @@ export default function ExtensionIntegrationPage() {
             </div>
           </div>
 
-          <div className="pt-4 border-t border-[#6E250A]/10 flex items-center justify-between">
+          <div className="pt-4 border-t border-[#6E250A]/10 flex items-center justify-between gap-2">
             <span className="text-xs text-[#2D0E03]/60">
-              Source: <code>apps/extension/</code>
+              Loopback API:{" "}
+              <strong className={backendOnline ? "text-emerald-700" : "text-[#B34A0E]"}>
+                {backendOnline === null ? "Checking..." : backendOnline ? "Connected (127.0.0.1:8000)" : "Offline"}
+              </strong>
             </span>
             <Button
               variant="primary"
               size="sm"
               className="text-xs gap-1.5"
-              onClick={() => alert("Extension build located in apps/extension/dist")}
+              onClick={handleCopyPath}
             >
-              <Download className="w-3.5 h-3.5" />
-              Check Build Artifacts
+              {copiedPath ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+              {copiedPath ? "Copied apps/extension/dist" : "Copy Dist Path"}
             </Button>
           </div>
         </Card>

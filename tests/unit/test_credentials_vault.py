@@ -17,7 +17,7 @@ def test_vault_encryption_roundtrip(tmp_path):
     vault = CredentialsVault(vault_path=vault_file)
 
     # 1. Save credential
-    vault.save_credential("myworkdayjobs.com", "ayush@example.com", "SuperSecretP@ss123")
+    vault.save_credential("myworkdayjobs.com", "alex.rivera@example.com", "SuperSecretP@ss123")
 
     # 2. Verify encrypted file exists and does NOT contain plaintext password
     with open(vault_file, "rb") as f:
@@ -27,7 +27,7 @@ def test_vault_encryption_roundtrip(tmp_path):
     # 3. Retrieve decrypted credential
     cred = vault.retrieve_credential("myworkdayjobs.com")
     assert cred is not None
-    assert cred["username"] == "ayush@example.com"
+    assert cred["username"] == "alex.rivera@example.com"
     assert cred["password"] == "SuperSecretP@ss123"
 
     # 4. List portals (must not leak password)

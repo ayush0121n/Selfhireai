@@ -11,21 +11,21 @@ from packages.contracts.hasher import compute_canonical_payload_hash
 
 def test_greenhouse_field_mapping():
     candidate = {
-        "full_name": "Ayush Narkhede",
-        "email": "ayush@example.com",
+        "full_name": "Alex Rivera",
+        "email": "alex.rivera@example.com",
         "phone": "+91 98765 43210",
         "location": "Pune, India",
-        "linkedin_url": "https://linkedin.com/in/ayush",
-        "portfolio_url": "https://ayush.dev",
+        "linkedin_url": "https://linkedin.com/in/alex-rivera",
+        "portfolio_url": "https://alexrivera.dev",
         "cover_letter": "Excited for this role."
     }
 
     fields = GreenhouseAdapter.map_candidate_fields(candidate)
-    assert fields["first_name"] == "Ayush"
-    assert fields["last_name"] == "Narkhede"
-    assert fields["email"] == "ayush@example.com"
-    assert fields["linkedin"] == "https://linkedin.com/in/ayush"
-    assert fields["website"] == "https://ayush.dev"
+    assert fields["first_name"] == "Alex"
+    assert fields["last_name"] == "Rivera"
+    assert fields["email"] == "alex.rivera@example.com"
+    assert fields["linkedin"] == "https://linkedin.com/in/alex-rivera"
+    assert fields["website"] == "https://alexrivera.dev"
 
 
 @pytest.mark.anyio
@@ -35,9 +35,9 @@ async def test_greenhouse_tamper_detection_protection():
     # Mock page DOM state
     mock_page = MagicMock()
     mock_page.input_value = AsyncMock(side_effect=lambda sel: {
-        "#first_name": "Ayush",
-        "#last_name": "Narkhede",
-        "#email": "ayush@example.com",
+        "#first_name": "Alex",
+        "#last_name": "Rivera",
+        "#email": "alex.rivera@example.com",
         "#phone": "+91 98765 43210"
     }.get(sel, ""))
     
@@ -47,9 +47,9 @@ async def test_greenhouse_tamper_detection_protection():
 
     legit_hash = compute_canonical_payload_hash({
         "board_url": adapter.board_url,
-        "first_name": "Ayush",
-        "last_name": "Narkhede",
-        "email": "ayush@example.com",
+        "first_name": "Alex",
+        "last_name": "Rivera",
+        "email": "alex.rivera@example.com",
         "phone": "+91 98765 43210"
     })
 

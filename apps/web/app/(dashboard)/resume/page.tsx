@@ -99,7 +99,7 @@ export default function ResumeStudioPage() {
                 size="sm"
                 className="text-xs"
                 onClick={() =>
-                  setResumeText(`Ayush Sharma\nayush@example.com | +91 98765 43210\n\nEXPERIENCE\nSoftware Engineer | Acme Corp (2023 - Present)\n- Architected high-throughput microservice in FastAPI reducing response latency by 42% across 100k daily queries.\n- Built automated job ingestion pipeline utilizing Docker and PostgreSQL, scaling crawler throughput by 3x.\n- Maintained 99.9% uptime across production Kubernetes clusters with zero security incidents.\n\nTECHNICAL SKILLS\nPython, FastAPI, Docker, Kubernetes, React, TypeScript, PostgreSQL, AWS`)
+                  setResumeText(`Alex Rivera\nalex.rivera@example.com | +91 98765 43210\n\nEXPERIENCE\nSoftware Engineer | Acme Corp (2023 - Present)\n- Architected high-throughput microservice in FastAPI reducing response latency by 42% across 100k daily queries.\n- Built automated job ingestion pipeline utilizing Docker and PostgreSQL, scaling crawler throughput by 3x.\n- Maintained 99.9% uptime across production Kubernetes clusters with zero security incidents.\n\nTECHNICAL SKILLS\nPython, FastAPI, Docker, Kubernetes, React, TypeScript, PostgreSQL, AWS`)
                 }
               >
                 Load Real Template

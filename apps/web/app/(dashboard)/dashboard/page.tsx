@@ -31,15 +31,19 @@ export default function DashboardPage() {
   const [profile, setProfile] = useState<any>(null);
   const [featuredJobs, setFeaturedJobs] = useState<any[]>([]);
   const [metrics, setMetrics] = useState<any>(null);
+  const [strength, setStrength] = useState<any>(null);
+  const [analytics, setAnalytics] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     async function loadRealData() {
       try {
-        const [profileRes, metricsRes, featuredRes] = await Promise.allSettled([
+        const [profileRes, metricsRes, featuredRes, strengthRes, analyticsRes] = await Promise.allSettled([
           fetch(`${API_BASE}/api/v1/profile`),
           fetch(`${API_BASE}/api/v1/admin/metrics`),
           fetch(`${API_BASE}/api/v1/discovery/featured`),
+          fetch(`${API_BASE}/api/v1/profile/strength`),
+          fetch(`${API_BASE}/api/v1/applications/analytics/summary`),
         ]);
 
         if (profileRes.status === "fulfilled" && profileRes.value.ok) {
@@ -56,6 +60,14 @@ export default function DashboardPage() {
           const featData = await featuredRes.value.json();
           setFeaturedJobs(featData.companies || []);
         }
+
+        if (strengthRes.status === "fulfilled" && strengthRes.value.ok) {
+          setStrength(await strengthRes.value.json());
+        }
+
+        if (analyticsRes.status === "fulfilled" && analyticsRes.value.ok) {
+          setAnalytics(await analyticsRes.value.json());
+        }
       } catch (err) {
         console.error("Failed to load real data:", err);
       } finally {
@@ -65,7 +77,7 @@ export default function DashboardPage() {
     loadRealData();
   }, []);
 
-  const verifiedEvidenceCount = profile?.evidence_items?.length || 0;
+  const verifiedEvidenceCount = profile?.evidence?.length ?? profile?.evidence_items?.length ?? 0;
   const targetRoles = Array.isArray(profile?.target_roles) ? profile.target_roles : [];
 
   return (
@@ -177,6 +189,83 @@ export default function DashboardPage() {
             <div className="text-[11px] text-emerald-700 font-medium mt-0.5">
               100% SHA-256 confirmed
             </div>
+          </div>
+        </Card>
+      </div>
+
+      {/* Dossier Intelligence Row: Profile Strength, Funnel & Next Actions */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        <Card className="p-5 space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold uppercase tracking-wider text-[#2D0E03]/60">
+              Profile Strength
+            </span>
+            <span className="font-mono text-sm font-bold text-[#B34A0E]">
+              {strength?.score ?? 0}% • {strength?.tier || "Ready"}
+            </span>
+          </div>
+          <div className="w-full h-2 rounded-full bg-[#FEF5E7] overflow-hidden border border-[#6E250A]/10">
+            <div
+              className="h-full bg-[#B34A0E] transition-all"
+              style={{ width: `${strength?.score ?? 0}%` }}
+            />
+          </div>
+          <p className="text-[11px] text-[#2D0E03]/70">
+            {strength?.missing?.length > 0
+              ? `Next boost: ${strength.missing[0]}`
+              : "All core profile sections verified."}
+          </p>
+          <Link href="/settings/profile" className="inline-flex items-center gap-1 text-xs font-semibold text-[#B34A0E] hover:underline">
+            Manage Profile & Strength <ArrowRight className="w-3 h-3" />
+          </Link>
+        </Card>
+
+        <Card className="p-5 space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold uppercase tracking-wider text-[#2D0E03]/60">
+              Application Funnel
+            </span>
+            <Link href="/applications" className="text-[11px] font-semibold text-[#B34A0E] hover:underline">
+              Open Kanban
+            </Link>
+          </div>
+          <div className="grid grid-cols-3 gap-2 text-center">
+            {[
+              { label: "Prepared", val: analytics?.stage_counts?.PREPARED ?? 0 },
+              { label: "Confirmed", val: analytics?.stage_counts?.CONFIRMED ?? 0 },
+              { label: "Interview", val: analytics?.stage_counts?.INTERVIEW ?? 0 },
+            ].map((item) => (
+              <div key={item.label} className="p-2 rounded-[8px] bg-[#FEF5E7]">
+                <div className="font-display text-xl font-bold text-[#2D0E03]">{item.val}</div>
+                <div className="text-[10px] text-[#2D0E03]/60">{item.label}</div>
+              </div>
+            ))}
+          </div>
+        </Card>
+
+        <Card className="p-5 space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold uppercase tracking-wider text-[#2D0E03]/60">
+              Worth a Look Next
+            </span>
+            <Badge variant="peach" className="text-[10px]">
+              {(analytics?.next_actions || []).length} items
+            </Badge>
+          </div>
+          <div className="space-y-2">
+            {(analytics?.next_actions || []).slice(0, 2).map((act: any, idx: number) => (
+              <Link
+                key={idx}
+                href={act.href || "/applications"}
+                className="block p-2.5 rounded-[8px] bg-[#FEF5E7]/70 hover:bg-[#FEF5E7] border border-[#6E250A]/10 text-xs transition-colors"
+              >
+                <div className="font-semibold text-[#2D0E03] truncate">{act.title}</div>
+                <div className="text-[10px] text-[#2D0E03]/60 truncate">{act.subtitle}</div>
+              </Link>
+            ))}
+            {(analytics?.next_actions || []).length === 0 && (
+              <p className="text-xs text-[#2D0E03]/60">No urgent actions pending.</p>
+            )}
           </div>
         </Card>
       </div>

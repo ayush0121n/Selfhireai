@@ -12,8 +12,8 @@ from services.api.engine.matching.scorer import FitScorer
 def sample_candidate():
     return CandidateProfile(
         user_id="usr_01",
-        full_name="Ayush Narkhede",
-        email="ayush@example.com",
+        full_name="Alex Rivera",
+        email="alex.rivera@example.com",
         phone="+91 9876543210",
         location="Pune, India",
         work_authorization="Authorized",

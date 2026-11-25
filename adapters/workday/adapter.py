@@ -8,8 +8,9 @@ Handles:
 """
 
 from __future__ import annotations
-from typing import Any, Dict, List, Optional
-from packages.contracts.hasher import compute_canonical_payload_hash
+import asyncio
+from typing import Any, Callable, Dict, List, Optional
+from packages.contracts.hasher import compute_canonical_payload_hash, compute_normalized_form_hash
 
 try:
     from playwright.async_api import Page, async_playwright
@@ -131,3 +132,30 @@ class WorkdayAdapter:
             "wizard_step": "CONFIRMED",
             "verified_hash": approved_hash
         }
+
+    async def keep_alive_heartbeat(
+        self,
+        page: Page,
+        is_pending_fn: Callable[[], bool],
+        interval_seconds: int = 240,
+        max_duration_seconds: int = 1800,
+    ) -> int:
+        """
+        Non-destructive Playwright keep-alive heartbeat (every 4 minutes) while an
+        application sits in NEEDS_APPROVAL so Workday enterprise sessions do not expire.
+        Returns the number of heartbeats sent.
+        """
+        elapsed = 0
+        pings = 0
+        while elapsed < max_duration_seconds and is_pending_fn():
+            await asyncio.sleep(interval_seconds)
+            elapsed += interval_seconds
+            if not is_pending_fn():
+                break
+            try:
+                # Non-destructive DOM read / ping that keeps session cookies alive
+                await page.evaluate("() => document.title")
+                pings += 1
+            except Exception:
+                break
+        return pings

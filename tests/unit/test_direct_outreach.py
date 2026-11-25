@@ -80,7 +80,7 @@ def test_direct_outreach_generation_full_cycle():
     assert "Senior Backend Engineer" in resp.email_subject
     assert "Hi Sarah" in resp.email_body or "Hi Hiring Team" in resp.email_body
     assert "FinTech & Payments" in resp.email_body
-    assert "Ayush Narkhede" in resp.email_body
+    assert "Alex Rivera" in resp.email_body
 
     # 3. Copy-Paste Email & Mailto URL
     assert "TO: sarah.connor@stripe.com" in resp.copy_paste_email
@@ -90,13 +90,13 @@ def test_direct_outreach_generation_full_cycle():
 
     # 4. Tailored Resume Text & Markdown
     assert "PROFESSIONAL SUMMARY" in resp.tailored_resume_text
-    assert "AYUSH NARKHEDE" in resp.tailored_resume_text
+    assert "ALEX RIVERA" in resp.tailored_resume_text
     assert "CORE TECHNICAL SKILLS" in resp.tailored_resume_text
     assert "SHA-256" in resp.tailored_resume_text
     assert resp.tailored_resume.sha256_hash is not None
     assert resp.tailored_resume.unsupported_claims_found == 0
 
-    assert "# Ayush Narkhede" in resp.tailored_resume_markdown
+    assert "# Alex Rivera" in resp.tailored_resume_markdown
 
 
 def test_api_direct_outreach_endpoints():
@@ -135,7 +135,7 @@ def test_api_direct_outreach_endpoints():
 def test_api_send_email_direct():
     send_payload = {
         "target_email": "founder@techcorp.io",
-        "subject": "Senior Full Stack Engineer — Ayush Narkhede",
+        "subject": "Senior Full Stack Engineer — Alex Rivera",
         "body": "Hi, I have attached my verified resume for your review."
     }
     resp = client.post("/api/v1/outreach/send-email", json=send_payload)

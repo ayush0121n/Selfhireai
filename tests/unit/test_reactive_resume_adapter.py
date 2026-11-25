@@ -11,9 +11,9 @@ from services.api.engine.resume.reactive_resume_adapter import ReactiveResumeAda
 @pytest.fixture
 def candidate_profile():
     return CandidateProfile(
-        user_id="usr_ayush_01",
-        full_name="Ayush Narkhede",
-        email="ayush.narkhede@example.com",
+        user_id="usr_demo_01",
+        full_name="Alex Rivera",
+        email="alex.rivera@example.com",
         phone="+91 98765 43210",
         location="Pune, India",
         work_authorization="Authorized",
@@ -32,7 +32,7 @@ def candidate_profile():
         evidence=[
             EvidenceItem(
                 id="ev_exp_01",
-                user_id="usr_ayush_01",
+                user_id="usr_demo_01",
                 field_path="experience[0].bullets[0]",
                 verified_claim="Architected REST APIs handling 10,000 requests/minute with 99.9% uptime",
                 metric_citation="10,000 rpm / 99.9% uptime"
@@ -61,8 +61,8 @@ def test_export_to_json_resume_schema(candidate_profile, job_posting):
     json_resume = ReactiveResumeAdapter.to_json_resume(candidate_profile, tailored)
 
     assert json_resume["$schema"] == ReactiveResumeAdapter.SCHEMA_URL
-    assert json_resume["basics"]["name"] == "Ayush Narkhede"
-    assert json_resume["basics"]["email"] == "ayush.narkhede@example.com"
+    assert json_resume["basics"]["name"] == "Alex Rivera"
+    assert json_resume["basics"]["email"] == "alex.rivera@example.com"
     assert len(json_resume["work"]) == 1
     assert json_resume["work"][0]["name"] == "NextGen Systems"
     assert len(json_resume["work"][0]["highlights"]) >= 1

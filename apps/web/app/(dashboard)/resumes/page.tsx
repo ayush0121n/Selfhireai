@@ -145,6 +145,22 @@ export default function ResumesStudioPage() {
   const [activeTab, setActiveTab] = useState<"preview" | "rendercv" | "careerops" | "diff" | "star">("preview");
   const [selectedTheme, setSelectedTheme] = useState<string>("engineeringresumes");
   const [codeViewFormat, setCodeViewFormat] = useState<"yaml" | "latex" | "typst">("yaml");
+  const [candidateProfile, setCandidateProfile] = useState<{
+    full_name?: string;
+    email?: string;
+    phone?: string;
+    location?: string;
+  } | null>(null);
+  const [dossierThemes, setDossierThemes] = useState<Array<{
+    id: string;
+    name: string;
+    accent: string;
+    bg: string;
+    font: string;
+    layout: string;
+    density: string;
+  }>>([]);
+  const [activeDossierTheme, setActiveDossierTheme] = useState<string>("classic");
   
   const [isTailoring, setIsTailoring] = useState(false);
   const [copiedCode, setCopiedCode] = useState(false);
@@ -152,7 +168,27 @@ export default function ResumesStudioPage() {
 
   useEffect(() => {
     fetchLiveJobs();
+    fetchProfileAndThemes();
   }, []);
+
+  const fetchProfileAndThemes = async () => {
+    try {
+      const [pRes, tRes] = await Promise.all([
+        fetch(`${API_BASE}/api/v1/profile`),
+        fetch(`${API_BASE}/api/v1/resumes/themes`),
+      ]);
+      if (pRes.ok) {
+        setCandidateProfile(await pRes.json());
+      }
+      if (tRes.ok) {
+        const tData = await tRes.json();
+        setDossierThemes([...(tData.builtin_themes || []), ...(tData.custom_themes || [])]);
+        if (tData.active_theme) setActiveDossierTheme(tData.active_theme);
+      }
+    } catch (err) {
+      console.error("Could not load profile/themes:", err);
+    }
+  };
 
   const fetchLiveJobs = async () => {
     try {
@@ -503,18 +539,74 @@ export default function ResumesStudioPage() {
 
           {/* TAB 0: REACTIVE RESUME INTERACTIVE SHEET PREVIEW */}
           {activeTab === "preview" && (
-            <ReactiveResumeSheet
-              candidateName="Ayush Narkhede"
-              email="ayush.narkhede@example.com"
-              phone="+91 98765 43210"
-              location="Pune, India"
-              headline={tailoredResume.tailored_headline || "Distributed Systems Engineer"}
-              summary={tailoredResume.tailored_summary}
-              skills={tailoredResume.tailored_skills || ["Python", "FastAPI", "React", "PostgreSQL", "Docker", "Redis"]}
-              experience={tailoredResume.tailored_experience_bullets || []}
-              sha256Hash={tailoredResume.sha256_hash}
-              onDownloadJSONResume={handleDownloadJSONResume}
-            />
+            <div className="space-y-4">
+              {dossierThemes.length > 0 && (
+                <div className="flex flex-wrap items-center gap-2 p-3 rounded-xl bg-white border border-[#2D0E03]/10">
+                  <span className="text-xs font-semibold text-[#2D0E03]/70 mr-1">
+                    Dossier Theme ({dossierThemes.length}):
+                  </span>
+                  {dossierThemes.map((t) => (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={async () => {
+                        setActiveDossierTheme(t.id);
+                        try {
+                          await fetch(`${API_BASE}/api/v1/resumes/themes`, {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify(t),
+                          });
+                        } catch (err) {
+                          console.error("Failed to persist theme:", err);
+                        }
+                      }}
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-medium border flex items-center gap-1.5 transition-all ${
+                        activeDossierTheme === t.id
+                          ? "bg-[#2D0E03] text-white border-[#2D0E03]"
+                          : "bg-[#FEF5E7]/60 text-[#2D0E03] border-[#6E250A]/15 hover:bg-[#FAD7A0]/40"
+                      }`}
+                    >
+                      <span
+                        className="w-2.5 h-2.5 rounded-full border border-black/15"
+                        style={{ backgroundColor: t.accent }}
+                      />
+                      {t.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {(() => {
+                const chosen = dossierThemes.find((t) => t.id === activeDossierTheme);
+                return (
+                  <div
+                    className="rounded-2xl transition-colors"
+                    style={
+                      chosen
+                        ? {
+                            backgroundColor: chosen.bg,
+                            fontFamily: chosen.font,
+                            borderTop: `4px solid ${chosen.accent}`,
+                          }
+                        : undefined
+                    }
+                  >
+                    <ReactiveResumeSheet
+                      candidateName={candidateProfile?.full_name || "Candidate"}
+                      email={candidateProfile?.email || "candidate@example.com"}
+                      phone={candidateProfile?.phone || ""}
+                      location={candidateProfile?.location || "Remote"}
+                      headline={tailoredResume.tailored_headline || "Software Engineer"}
+                      summary={tailoredResume.tailored_summary}
+                      skills={tailoredResume.tailored_skills || []}
+                      experience={tailoredResume.tailored_experience_bullets || []}
+                      sha256Hash={tailoredResume.sha256_hash}
+                      onDownloadJSONResume={handleDownloadJSONResume}
+                    />
+                  </div>
+                );
+              })()}
+            </div>
           )}
 
           {/* TAB 1: RENDERCV & LATEX COMPILER */}

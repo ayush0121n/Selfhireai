@@ -24,6 +24,73 @@ class AnswerBankEngine:
     ) -> FormFieldMapping:
         q_lower = question_text.lower().strip()
 
+        # 0. Direct Verified Profile Identity & Core Fields -> VERIFIED_FACT
+        if any(term in q_lower for term in ["full name", "your name", "candidate name", "applicant name"]):
+            return FormFieldMapping(
+                field_key="full_name",
+                selector="input[name='name']",
+                field_type="text",
+                question_label=question_text,
+                proposed_value=profile.full_name,
+                evidence_ids=["ev_identity_name"],
+                classification=AnswerClassification.VERIFIED_FACT,
+                requires_user_confirmation=False,
+                is_filled=bool(profile.full_name),
+            )
+
+        if "email" in q_lower:
+            return FormFieldMapping(
+                field_key="email",
+                selector="input[type='email']",
+                field_type="text",
+                question_label=question_text,
+                proposed_value=str(profile.email),
+                evidence_ids=["ev_identity_email"],
+                classification=AnswerClassification.VERIFIED_FACT,
+                requires_user_confirmation=False,
+                is_filled=bool(profile.email),
+            )
+
+        if any(term in q_lower for term in ["phone", "mobile", "contact number"]):
+            return FormFieldMapping(
+                field_key="phone",
+                selector="input[type='tel']",
+                field_type="text",
+                question_label=question_text,
+                proposed_value=profile.phone,
+                evidence_ids=["ev_identity_phone"],
+                classification=AnswerClassification.VERIFIED_FACT,
+                requires_user_confirmation=False,
+                is_filled=bool(profile.phone),
+            )
+
+        if any(term in q_lower for term in ["location", "city", "address"]):
+            return FormFieldMapping(
+                field_key="location",
+                selector="input[name='location']",
+                field_type="text",
+                question_label=question_text,
+                proposed_value=profile.location,
+                evidence_ids=["ev_identity_location"],
+                classification=AnswerClassification.VERIFIED_FACT,
+                requires_user_confirmation=False,
+                is_filled=bool(profile.location),
+            )
+
+        if any(term in q_lower for term in ["technical skills", "primary skills", "core skills", "tech stack"]):
+            skills_val = ", ".join(profile.skills[:8])
+            return FormFieldMapping(
+                field_key="primary_skills",
+                selector="input[name='skills']",
+                field_type="text",
+                question_label=question_text,
+                proposed_value=skills_val,
+                evidence_ids=["ev_skills_verified"],
+                classification=AnswerClassification.VERIFIED_FACT,
+                requires_user_confirmation=False,
+                is_filled=bool(skills_val),
+            )
+
         # 1. Legal declarations & certifications -> LEGAL_ATTESTATION (Requires User)
         if any(term in q_lower for term in ["certify", "attest", "signature", "background check", "drug test"]):
             return FormFieldMapping(
@@ -54,7 +121,7 @@ class AnswerBankEngine:
 
         # 3. Work Authorization -> VERIFIED_FACT
         if any(term in q_lower for term in ["authorized to work", "work authorization", "legally authorized", "eligible to work"]):
-            is_auth = profile.work_authorization == "Authorized"
+            is_auth = "authorized" in (profile.work_authorization or "").lower()
             return FormFieldMapping(
                 field_key="work_authorization",
                 selector="input[name='work_auth']",
@@ -133,7 +200,7 @@ class AnswerBankEngine:
             )
 
         # 8. Specific Skill Years of Experience -> VERIFIED_FACT
-        skill_match = re.search(r"years of\s+([a-zA-Z0-9\.\#\+\s]+)\s+experience", q_lower)
+        skill_match = re.search(r"years of\s+([a-zA-Z0-9\.\#\+\-\s]+)\s+experience", q_lower)
         if skill_match:
             targeted_skill = skill_match.group(1).strip()
             # Calculate from verified experience

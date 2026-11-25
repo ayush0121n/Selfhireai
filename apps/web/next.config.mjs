@@ -2,10 +2,6 @@
 const nextConfig = {
   output: "standalone",
   reactStrictMode: false,
-  webpack: (config) => {
-    config.cache = false;
-    return config;
-  },
   eslint: {
     ignoreDuringBuilds: true,
   },

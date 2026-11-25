@@ -484,7 +484,7 @@ class RealJobExtractor:
     def deduplicate_and_save(
         self,
         jobs: List[Dict[str, Any]],
-        candidate_user_id: str = "usr_ayush_01"
+        candidate_user_id: str = "usr_demo_01"
     ) -> List[Dict[str, Any]]:
         """
         Deduplicates against SQLite public.jobs by canonical_url and jd_hash.
