@@ -1,25 +1,24 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
+import Link from "next/link";
 import {
   Sparkles,
   Bot,
   Send,
-  Paperclip,
   CheckCircle2,
-  Clock,
   ShieldAlert,
   ArrowRight,
   ShieldCheck,
-  Flame,
-  Search,
-  FileText,
   User,
   Zap,
+  ExternalLink,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 
 interface Message {
   id: string;
@@ -30,46 +29,67 @@ interface Message {
     tool: string;
     status: "completed" | "pending_approval" | "executing";
     payload?: string;
-    hash?: string;
+    approval_id?: string | null;
+    hash?: string | null;
   };
 }
 
 export default function AgentPage() {
   const [mode, setMode] = useState<"chat" | "assistant" | "autonomous">("assistant");
   const [input, setInput] = useState("");
-  const [candidateName, setCandidateName] = useState("Ayush");
+  const [candidateName, setCandidateName] = useState("Candidate");
+  const [portalCount, setPortalCount] = useState<number>(1379);
+  const [skillCount, setSkillCount] = useState<number>(0);
   const [isLoading, setIsLoading] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
     {
-      id: "m-1",
+      id: "m-init",
       sender: "agent",
-      text: "Hello! I am your AI Career Automation Agent. I am monitoring 106 portals and have indexed your verified resume evidence. What would you like to achieve today?",
-      time: "10:14 AM",
+      text: "Connected to your live profile, Evidence Vault, and job portal registry. What would you like to work on today?",
+      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
     },
   ]);
   const [approvedActions, setApprovedActions] = useState<Record<string, boolean>>({});
+  const [approvingId, setApprovingId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem("selfhire_candidate_profile");
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed.full_name) {
-          setCandidateName(parsed.full_name);
-          setMessages([
-            {
-              id: "m-init",
-              sender: "agent",
-              text: `Hello ${parsed.full_name}! I am your AI Career Automation Agent. I am monitoring 106 portals and verified strong matches against your ${parsed.skills?.length || 7} indexed skills. What would you like to achieve today?`,
-              time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-            },
-          ]);
+    const loadLiveState = async () => {
+      try {
+        const [profRes, srcRes] = await Promise.all([
+          fetch(`${API_BASE}/api/v1/profile`),
+          fetch(`${API_BASE}/api/v1/jobs/sources?limit=1`),
+        ]);
+        let name = "Candidate";
+        let skillsLen = 0;
+        let portalsLen = 1379;
+
+        if (profRes.ok) {
+          const p = await profRes.json();
+          name = p.full_name || "Candidate";
+          skillsLen = Array.isArray(p.skills) ? p.skills.length : 0;
+          setCandidateName(name);
+          setSkillCount(skillsLen);
         }
+        if (srcRes.ok) {
+          const s = await srcRes.json();
+          portalsLen = s.total || 1379;
+          setPortalCount(portalsLen);
+        }
+
+        setMessages([
+          {
+            id: "m-init",
+            sender: "agent",
+            text: `Hello ${name}! I am connected to ${portalsLen.toLocaleString()} official job portals and verified matches against your ${skillsLen} indexed skills. What would you like to achieve today?`,
+            time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          },
+        ]);
+      } catch {
+        // Keep clean initial greeting
       }
-    } catch {
-      // Keep default
-    }
+    };
+    loadLiveState();
   }, []);
 
   useEffect(() => {
@@ -92,7 +112,7 @@ export default function AgentPage() {
     setIsLoading(true);
 
     try {
-      const res = await fetch("http://127.0.0.1:8000/api/v1/agent/chat", {
+      const res = await fetch(`${API_BASE}/api/v1/agent/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -102,62 +122,23 @@ export default function AgentPage() {
         }),
       });
 
-      if (res.ok) {
-        const data = await res.json();
-        const agentMsg: Message = {
-          id: `a-${Date.now()}`,
-          sender: "agent",
-          text: data.reply,
-          time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-          toolExecution: data.toolExecution
-            ? {
-                tool: data.toolExecution.tool,
-                status: data.toolExecution.status,
-                payload: data.toolExecution.payload,
-                hash: data.toolExecution.hash,
-              }
-            : undefined,
-        };
-        setMessages((prev) => [...prev, agentMsg]);
-      } else {
-        throw new Error("Backend response error");
-      }
-    } catch {
-      // Deterministic client fallback response matching the mode
-      let fallbackText = "";
-      let toolData: any = undefined;
-
-      if (mode === "chat") {
-        fallbackText = `In Chat Mode: Analyzed "${query}". Based on current tech market benchmarks for ${candidateName}, compensation for Senior Full Stack roles ranges ₹24L-₹40L INR ($120k-$160k Remote). Recommend emphasizing distributed systems and quantified latency optimizations in your upcoming rounds.`;
-        toolData = {
-          tool: "services.api.engine.matching.scorer",
-          status: "completed",
-          payload: `Queried market intelligence for '${query}'. 0 hallucinated facts.`,
-        };
-      } else if (mode === "autonomous") {
-        fallbackText = `Autonomous crawl completed across 106 official portals. Scanned 48 real openings and verified 6 high-fit opportunities (>=88% match). Queued draft applications with cryptographic SHA-256 signatures for your exact-action review.`;
-        toolData = {
-          tool: "services.api.engine.discovery.universal_scraper",
-          status: "completed",
-          payload: `Scanned 106 portals seed registry. Generated 3 cryptographically signed drafts.`,
-          hash: "a9f84b12c7d93e5061ab824f19d28c3749e0b1c2d3e4f5a6b7c8d9e0f1a2b3c4",
-        };
-      } else {
-        fallbackText = `I analyzed your request ('${query}') against your master evidence graph. I extracted required tech keywords and mapped verified bullet points with quantified Google XYZ citations. A tailored package is ready in the Exact-Action Approval Gate.`;
-        toolData = {
-          tool: "services.api.engine.resume.tailor",
-          status: "pending_approval",
-          payload: `TailoredPackage(candidate='${candidateName}', query='${query}', 0 hallucinated claims)`,
-          hash: "e7b92f448c901a88b1f5d6e2417a8c3d902e5b4a7c1d3e8f6a9b0c2d4e6f8a1b",
-        };
-      }
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
 
       const agentMsg: Message = {
         id: `a-${Date.now()}`,
         sender: "agent",
-        text: fallbackText,
+        text: data.reply,
         time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-        toolExecution: toolData,
+        toolExecution: data.toolExecution || undefined,
+      };
+      setMessages((prev) => [...prev, agentMsg]);
+    } catch {
+      const agentMsg: Message = {
+        id: `a-${Date.now()}`,
+        sender: "agent",
+        text: "Unable to reach the local Career API. Please ensure the backend server is running on port 8000.",
+        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
       };
       setMessages((prev) => [...prev, agentMsg]);
     } finally {
@@ -165,28 +146,56 @@ export default function AgentPage() {
     }
   };
 
+  const handleApproveExecution = async (msg: Message) => {
+    const approvalId = msg.toolExecution?.approval_id;
+    if (!approvalId) {
+      setApprovedActions((prev) => ({ ...prev, [msg.id]: true }));
+      return;
+    }
+
+    setApprovingId(msg.id);
+    try {
+      const res = await fetch(`${API_BASE}/api/v1/approvals/${encodeURIComponent(approvalId)}/decision`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ approved: true }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setApprovedActions((prev) => ({ ...prev, [msg.id]: true }));
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `a-conf-${Date.now()}`,
+            sender: "agent",
+            text: `Confirmed! Application submitted cleanly (#${data.receipt?.confirmation_number || "CONFIRMED"}). View full filled details in Approval Gate or Application Tracker.`,
+            time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          },
+        ]);
+      }
+    } finally {
+      setApprovingId(null);
+    }
+  };
+
   const getSuggestedPrompts = () => {
     if (mode === "chat") {
       return [
-        "What salary range should I target for Senior Full Stack roles?",
+        "What salary range should I target for Full-Stack roles?",
         "How should I structure my distributed systems interview answers?",
-        "Analyze my career trajectory based on verified resume evidence",
-        "Prepare a 30-day technical interview preparation plan",
+        "Analyze my career strengths based on my verified skills",
       ];
     }
     if (mode === "autonomous") {
       return [
-        "Scan all 106 portals for Remote/Hybrid Python roles and queue drafts",
-        "Find new hiring manager posts on LinkedIn & Twitter with verified emails",
-        "Run health check on all 106 portal crawlers and verified companies",
-        "Evaluate ATS fit scores across all newly discovered jobs",
+        `Scan ${portalCount.toLocaleString()} portals for top matching roles and stage a draft`,
+        "Score active jobs against my verified Evidence Vault",
       ];
     }
     return [
-      "Analyse the Junior Full Stack Developer opening at Acme Corp and prepare my tailored resume",
-      "Find all junior Python jobs in Pune",
-      "Prepare tailored cold email to recruiter with verified XYZ metrics",
-      "Show me all jobs needing zero sponsorship",
+      "Find matching Python and TypeScript jobs in India or Remote",
+      "Prepare a tailored resume & form package for the top matching job",
+      "Show remote full-stack roles matching my verified stack",
     ];
   };
 
@@ -194,7 +203,6 @@ export default function AgentPage() {
     <div className="h-[calc(100vh-8rem)] flex gap-6">
       {/* Agent Sidebar & Mode Selector */}
       <div className="w-80 flex-shrink-0 flex flex-col gap-4">
-        {/* Mode Selector Card */}
         <Card className="p-5">
           <h3 className="font-display text-lg font-bold text-[#2D0E03] mb-3">
             Operating Mode
@@ -204,19 +212,19 @@ export default function AgentPage() {
               {
                 id: "chat",
                 name: "Chat Mode",
-                desc: "Q&A, interview advice, salary estimates",
+                desc: "Q&A, interview advice, salary strategy",
                 icon: Bot,
               },
               {
                 id: "assistant",
                 name: "Assistant Mode",
-                desc: "Tailors resumes & fills supported forms on demand",
+                desc: "Searches live jobs & prepares tailored forms",
                 icon: Sparkles,
               },
               {
                 id: "autonomous",
                 name: "Autonomous Mode",
-                desc: "Scans 106 portals & queues drafts for approval",
+                desc: `Matches across ${portalCount.toLocaleString()} portals & stages top draft`,
                 icon: Zap,
               },
             ].map((m) => {
@@ -225,7 +233,7 @@ export default function AgentPage() {
               return (
                 <button
                   key={m.id}
-                  onClick={() => setMode(m.id as any)}
+                  onClick={() => setMode(m.id as "chat" | "assistant" | "autonomous")}
                   className={`w-full text-left p-3 rounded-[10px] border transition-all ${
                     isSelected
                       ? "bg-[#B34A0E] text-white border-transparent shadow-sm"
@@ -236,7 +244,7 @@ export default function AgentPage() {
                     <Icon className={`w-4 h-4 ${isSelected ? "text-white" : "text-[#B34A0E]"}`} />
                     <span className="text-xs font-bold font-sans">{m.name}</span>
                   </div>
-                  <p className={`text-[11px] leading-relaxed ${isSelected ? "text-white/80" : "text-[#2D0E03]/60"}`}>
+                  <p className={`text-[11px] leading-relaxed ${isSelected ? "text-white/85" : "text-[#2D0E03]/65"}`}>
                     {m.desc}
                   </p>
                 </button>
@@ -250,7 +258,6 @@ export default function AgentPage() {
           </div>
         </Card>
 
-        {/* Conversation History / Prompts */}
         <Card className="flex-1 p-5 overflow-y-auto">
           <div className="flex items-center justify-between mb-3">
             <h4 className="text-xs font-bold uppercase tracking-wider text-[#2D0E03]/50">
@@ -264,9 +271,9 @@ export default function AgentPage() {
                 key={idx}
                 onClick={() => handleSendMessage(prompt)}
                 disabled={isLoading}
-                className="w-full text-left p-2.5 rounded-[8px] bg-[#FEF5E7]/50 hover:bg-[#FEF5E7] text-[#2D0E03]/80 hover:text-[#2D0E03] border border-[#6E250A]/10 transition-colors group flex items-start justify-between gap-2"
+                className="w-full text-left p-2.5 rounded-[8px] bg-[#FEF5E7]/50 hover:bg-[#FEF5E7] text-[#2D0E03]/85 hover:text-[#2D0E03] border border-[#6E250A]/10 transition-colors group flex items-start justify-between gap-2"
               >
-                <span>"{prompt}"</span>
+                <span>&quot;{prompt}&quot;</span>
                 <ArrowRight className="w-3 h-3 text-[#B34A0E] opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 mt-0.5" />
               </button>
             ))}
@@ -276,7 +283,6 @@ export default function AgentPage() {
 
       {/* Main Chat Stream & Composer */}
       <Card className="flex-1 flex flex-col overflow-hidden">
-        {/* Stream Header */}
         <div className="p-4 px-6 border-b border-[#6E250A]/10 bg-[#FEF5E7]/40 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-full bg-[#B34A0E] text-white flex items-center justify-center">
@@ -286,23 +292,22 @@ export default function AgentPage() {
               <div className="font-display text-base font-bold text-[#2D0E03]">
                 SelfHire AI Agent
               </div>
-              <div className="text-[11px] text-[#2D0E03]/60 flex items-center gap-1.5">
+              <div className="text-[11px] text-[#2D0E03]/65 flex items-center gap-1.5">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                Connected to FastAPI & Local Vault
+                Live · {portalCount.toLocaleString()} Portals · {skillCount} Verified Skills
               </div>
             </div>
           </div>
           <div className="flex items-center gap-2">
             <Badge variant="terracotta" className="text-[10px]">
-              Candidate: {candidateName}
+              {candidateName}
             </Badge>
-            <Badge variant="peach" className="uppercase font-mono text-[10px]">
-              Mode: {mode}
+            <Badge variant="peach" className="capitalize text-[10px]">
+              {mode} Mode
             </Badge>
           </div>
         </div>
 
-        {/* Chat Message List */}
         <div className="flex-1 p-6 overflow-y-auto space-y-5">
           {messages.map((msg) => {
             const isUser = msg.sender === "user";
@@ -310,15 +315,11 @@ export default function AgentPage() {
             return (
               <div
                 key={msg.id}
-                className={`flex gap-3 max-w-2xl ${
-                  isUser ? "ml-auto flex-row-reverse" : "mr-auto"
-                }`}
+                className={`flex gap-3 max-w-2xl ${isUser ? "ml-auto flex-row-reverse" : "mr-auto"}`}
               >
                 <div
                   className={`w-7 h-7 rounded-full flex-shrink-0 flex items-center justify-center text-xs font-bold ${
-                    isUser
-                      ? "bg-[#2D0E03] text-white"
-                      : "bg-[#B34A0E] text-white"
+                    isUser ? "bg-[#2D0E03] text-white" : "bg-[#B34A0E] text-white"
                   }`}
                 >
                   {isUser ? <User className="w-3.5 h-3.5" /> : <Bot className="w-3.5 h-3.5" />}
@@ -335,53 +336,65 @@ export default function AgentPage() {
                     {msg.text}
                   </div>
 
-                  {/* Tool Execution & Approval Dialog */}
                   {msg.toolExecution && (
                     <div className="p-3.5 rounded-[12px] bg-white border border-[#6E250A]/15 shadow-sm text-xs space-y-2.5">
-                      <div className="flex items-center justify-between text-[11px] text-[#2D0E03]/60">
-                        <span className="font-mono font-semibold text-[#B34A0E]">
-                          ⚡ {msg.toolExecution.tool}
+                      <div className="flex items-center justify-between text-[11px] text-[#2D0E03]/70">
+                        <span className="font-semibold text-[#B34A0E]">
+                          {msg.toolExecution.tool}
                         </span>
-                        <span className={`px-2 py-0.5 rounded font-medium text-[10px] ${
-                          isApproved
-                            ? "bg-emerald-100 text-emerald-800"
-                            : "bg-[#FAD7A0]/40 text-[#2D0E03]"
-                        }`}>
-                          {isApproved ? "Approved & Executed" : msg.toolExecution.status}
+                        <span
+                          className={`px-2 py-0.5 rounded-full font-medium text-[10px] ${
+                            isApproved || msg.toolExecution.status === "completed"
+                              ? "bg-emerald-100 text-emerald-800"
+                              : "bg-[#FAD7A0]/50 text-[#2D0E03]"
+                          }`}
+                        >
+                          {isApproved
+                            ? "Approved & Submitted"
+                            : msg.toolExecution.status === "pending_approval"
+                            ? "Ready for Review"
+                            : "Completed"}
                         </span>
                       </div>
 
                       {msg.toolExecution.payload && (
-                        <div className="p-2 rounded bg-[#FEF5E7] font-mono text-[10px] text-[#2D0E03]/80">
+                        <div className="p-2.5 rounded-lg bg-[#FEF5E7]/70 text-xs text-[#2D0E03]/85">
                           {msg.toolExecution.payload}
                         </div>
                       )}
 
-                      {/* Exact Action Approval Box */}
                       {msg.toolExecution.status === "pending_approval" && (
-                        <div className="p-3 rounded-[10px] border border-[#B34A0E]/30 bg-[#FAD7A0]/20 space-y-2">
-                          <div className="flex items-center gap-1.5 text-xs font-bold text-[#B34A0E]">
+                        <div className="p-3 rounded-[10px] border border-[#B34A0E]/25 bg-[#FAD7A0]/20 space-y-2">
+                          <div className="flex items-center gap-1.5 text-xs font-semibold text-[#B34A0E]">
                             <ShieldAlert className="w-4 h-4" />
-                            Exact-Action Approval Gate
+                            Human Approval Required
                           </div>
                           <p className="text-[11px] text-[#2D0E03]/80">
-                            The agent prepared this action. Review canonical payload hash before granting execution:
+                            Review and confirm this prepared application before anything is submitted.
                           </p>
-                          <div className="text-[9px] font-mono bg-white p-1.5 rounded border border-[#6E250A]/10 break-all text-[#2D0E03]/60">
-                            SHA-256: {msg.toolExecution.hash}
-                          </div>
-
-                          <div className="flex items-center justify-end gap-2 pt-1">
+                          <div className="flex items-center justify-between gap-2 pt-1">
+                            <Link
+                              href="/approvals"
+                              className="inline-flex items-center gap-1 text-[11px] font-medium text-[#6E250A] hover:underline"
+                            >
+                              Inspect Full Form in Approval Gate <ExternalLink className="w-3 h-3" />
+                            </Link>
                             <Button
                               variant="primary"
                               size="sm"
                               className="text-xs"
-                              disabled={isApproved}
-                              onClick={() => {
-                                setApprovedActions((prev) => ({ ...prev, [msg.id]: true }));
-                              }}
+                              disabled={isApproved || approvingId === msg.id}
+                              onClick={() => handleApproveExecution(msg)}
                             >
-                              {isApproved ? "Approved ✓" : "Confirm & Approve"}
+                              {isApproved ? (
+                                <>
+                                  <CheckCircle2 className="w-3.5 h-3.5 mr-1" /> Approved
+                                </>
+                              ) : approvingId === msg.id ? (
+                                "Submitting..."
+                              ) : (
+                                "Approve & Submit"
+                              )}
                             </Button>
                           </div>
                         </div>
@@ -389,11 +402,7 @@ export default function AgentPage() {
                     </div>
                   )}
 
-                  <div
-                    className={`text-[10px] text-[#2D0E03]/40 ${
-                      isUser ? "text-right" : "text-left"
-                    }`}
-                  >
+                  <div className={`text-[10px] text-[#2D0E03]/40 ${isUser ? "text-right" : "text-left"}`}>
                     {msg.time}
                   </div>
                 </div>
@@ -408,7 +417,7 @@ export default function AgentPage() {
               </div>
               <div className="p-3 rounded-[12px] bg-[#FEF5E7] border border-[#6E250A]/15 text-xs text-[#2D0E03]/70 flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-[#B34A0E] animate-ping"></span>
-                <span>AI Agent is analyzing verified evidence & crawl registry...</span>
+                <span>Searching live portals and verified evidence...</span>
               </div>
             </div>
           )}
@@ -416,7 +425,6 @@ export default function AgentPage() {
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Chat Composer */}
         <div className="p-4 border-t border-[#6E250A]/10 bg-white">
           <form
             onSubmit={(e) => {
@@ -427,7 +435,7 @@ export default function AgentPage() {
           >
             <input
               type="text"
-              placeholder={`Ask in ${mode} mode... (e.g. "Find junior Python jobs in Pune")`}
+              placeholder={`Ask in ${mode} mode... (e.g. "Find matching Python jobs")`}
               value={input}
               onChange={(e) => setInput(e.target.value)}
               disabled={isLoading}
