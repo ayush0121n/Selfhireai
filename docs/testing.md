@@ -13,9 +13,10 @@ In strict compliance with `/superpowers` (plan & test first) and `/karpathy-anti
 
 ```
 tests/
-├── unit/                        # Fast, deterministic unit tests (70 passing in suite)
+├── unit/                        # Fast, deterministic unit tests (71 passing in suite)
 │   ├── test_payload_hasher.py   # Canonical JSON serialization & SHA-256 consistency
 │   ├── test_reactive_resume_adapter.py # JSON Resume v1.0 schema import & export validation
+│   ├── test_resume_rag.py       # RAG bullet parsing and XYZ extraction
 │   ├── test_rendercv_careerops.py # RenderCV YAML compiler & CareerOps XYZ metric analyzer
 │   ├── test_fit_scorer.py       # 40% skills, 25% exp, 15% loc, 10% sal weighted formula
 │   ├── test_evidence_vault.py   # Evidence extraction & claim verification
