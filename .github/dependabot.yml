@@ -1,0 +1,38 @@
+version: 2
+updates:
+  # Daily security updates for Python backend dependencies
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 10
+    labels:
+      - "security"
+      - "dependencies"
+      - "backend"
+    reviewers:
+      - "ayush0121n"
+
+  # Weekly updates for Next.js frontend dependencies
+  - package-ecosystem: "npm"
+    directory: "/apps/web"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 10
+    labels:
+      - "security"
+      - "dependencies"
+      - "frontend"
+    reviewers:
+      - "ayush0121n"
+
+  # Automated updates for GitHub Actions workflows
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    labels:
+      - "security"
+      - "ci/cd"
