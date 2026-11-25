@@ -62,23 +62,20 @@ function LoginForm() {
       const destination = getTargetUrl(role);
 
       if (error) {
-        // Fallback for local admin or local development
-        if (role === "admin" && email.trim().toLowerCase() === "admin@selfhireai.com" && password === "Admin@123") {
+        // Allow local admin credentials only outside production
+        if (
+          process.env.NODE_ENV !== "production" &&
+          role === "admin" &&
+          email.trim().toLowerCase() === "admin@selfhireai.com" &&
+          password === "Admin@123"
+        ) {
           localStorage.setItem("selfhire_auth_role", "admin");
           localStorage.setItem("selfhire_auth_email", "admin@selfhireai.com");
           router.push(destination);
           return;
         }
 
-        // If candidate provided demo/test credentials and supabase is unreachable or user not yet registered
-        if (role === "candidate" && email.includes("@")) {
-          localStorage.setItem("selfhire_auth_role", "candidate");
-          localStorage.setItem("selfhire_auth_email", email.trim());
-          router.push(destination);
-          return;
-        }
-
-        setErrorMsg(error.message || "Failed to sign in. Please verify your credentials.");
+        setErrorMsg(error.message || "Invalid email or password. Use Quick Demo Sign In for local testing.");
         return;
       }
 
@@ -87,11 +84,8 @@ function LoginForm() {
         localStorage.setItem("selfhire_auth_email", data.user.email || email);
         router.push(destination);
       }
-    } catch (err: any) {
-      // Graceful offline fallback
-      localStorage.setItem("selfhire_auth_role", role);
-      localStorage.setItem("selfhire_auth_email", email.trim() || "candidate@selfhire.ai");
-      router.push(getTargetUrl(role));
+    } catch {
+      setErrorMsg("Unable to reach authentication service. Check your connection or use Quick Demo Sign In.");
     } finally {
       setLoading(false);
     }

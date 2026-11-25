@@ -7,6 +7,8 @@ Requirement Matching, Resume Tailoring, Smart Form Preparation, and Exact-Action
 from __future__ import annotations
 import hashlib
 import json
+import os
+import re
 import sqlite3
 import secrets
 import urllib.parse
@@ -1477,8 +1479,37 @@ class OpenAndFillRequest(BaseModel):
     filled_fields: Optional[List[Dict[str, Any]]] = None
 
 
-def _launch_headed_portal_fill(url: str, field_map: Dict[str, str]) -> None:
-    """Best-effort non-blocking headed Playwright fill; NEVER clicks Submit."""
+def _generate_resume_attachment_file(profile: CandidateProfile, company_name: str, job_title: str) -> Optional[str]:
+    """Generates a clean DOCX resume file in data/uploads/resumes/ for portal file inputs."""
+    try:
+        import docx
+        os.makedirs(os.path.join("data", "uploads", "resumes"), exist_ok=True)
+        safe_name = re.sub(r"[^a-zA-Z0-9_-]", "_", profile.full_name or "Candidate")
+        out_path = os.path.abspath(os.path.join("data", "uploads", "resumes", f"{safe_name}_Resume.docx"))
+        doc = docx.Document()
+        doc.add_heading(profile.full_name, level=0)
+        doc.add_paragraph(f"{profile.email} | {profile.phone} | {profile.location}")
+        if profile.linkedin_url:
+            doc.add_paragraph(f"LinkedIn: {profile.linkedin_url}")
+        doc.add_heading("Target Role", level=1)
+        doc.add_paragraph(f"{job_title} at {company_name}")
+        doc.add_heading("Core Skills", level=1)
+        doc.add_paragraph(", ".join(profile.skills[:15]))
+        doc.add_heading("Verified Experience", level=1)
+        for ev in profile.evidence[:6]:
+            doc.add_paragraph(ev.verified_claim, style="List Bullet")
+        doc.save(out_path)
+        return out_path
+    except Exception:
+        return None
+
+
+def _launch_headed_portal_fill(url: str, field_map: Dict[str, str], resume_path: Optional[str] = None) -> None:
+    """
+    Best-effort non-blocking headed Playwright fill across up to 3 wizard steps.
+    Attaches generated DOCX resume to input[type='file'] if present.
+    STRICTLY NEVER clicks final Submit / Apply buttons.
+    """
     try:
         from playwright.sync_api import sync_playwright
     except Exception:
@@ -1498,18 +1529,46 @@ def _launch_headed_portal_fill(url: str, field_map: Dict[str, str]) -> None:
                 "location": ["input[name*='location' i]", "input[name*='city' i]"],
                 "motivation_note": ["textarea"],
             }
-            for key, selectors in selector_map.items():
-                val = field_map.get(key)
-                if not val:
-                    continue
-                for sel in selectors:
+
+            for step in range(3):
+                for key, selectors in selector_map.items():
+                    val = field_map.get(key)
+                    if not val:
+                        continue
+                    for sel in selectors:
+                        try:
+                            loc = page.locator(sel).first
+                            if loc.count() > 0 and loc.is_visible() and not loc.input_value():
+                                loc.fill(str(val))
+                                break
+                        except Exception:
+                            continue
+
+                # Attach resume file if file upload input exists
+                if resume_path and os.path.exists(resume_path):
                     try:
-                        loc = page.locator(sel).first
-                        if loc.count() > 0 and loc.is_visible():
-                            loc.fill(str(val))
-                            break
+                        file_input = page.locator("input[type='file']").first
+                        if file_input.count() > 0:
+                            file_input.set_input_files(resume_path)
+                    except Exception:
+                        pass
+
+                # Advance multi-step wizard ONLY if an explicit Next/Continue button exists (never Submit/Apply)
+                advanced = False
+                for next_sel in ["button:has-text('Next')", "button:has-text('Continue')"]:
+                    try:
+                        btn = page.locator(next_sel).first
+                        if btn.count() > 0 and btn.is_visible():
+                            btn_text = (btn.inner_text() or "").lower()
+                            if "submit" not in btn_text and "apply" not in btn_text:
+                                btn.click()
+                                page.wait_for_timeout(1200)
+                                advanced = True
+                                break
                     except Exception:
                         continue
+                if not advanced:
+                    break
 
             # Intentionally stop before Submit and leave page open up to 10 minutes for user review
             page.wait_for_timeout(600000)
@@ -1580,10 +1639,16 @@ def open_and_fill_portal(req: OpenAndFillRequest):
     except Exception:
         pass
 
+    resume_path = _generate_resume_attachment_file(
+        _CURRENT_PROFILE,
+        req.company_name or "Official Portal",
+        req.job_title or "Target Role",
+    )
+
     if req.launch_browser:
         threading.Thread(
             target=_launch_headed_portal_fill,
-            args=(req.destination_url, field_lookup),
+            args=(req.destination_url, field_lookup, resume_path),
             daemon=True,
         ).start()
 
@@ -1594,6 +1659,8 @@ def open_and_fill_portal(req: OpenAndFillRequest):
         "ats_detected": ats_detected,
         "filled_fields": fields,
         "filled_count": len(fields),
+        "resume_attached": resume_path is not None,
+        "resume_filename": os.path.basename(resume_path) if resume_path else None,
         "message": "Official portal opened and form fields prepared. Please review and click Submit on the official portal, then click 'Confirm Submitted'.",
         "snapshot": snapshot,
     }

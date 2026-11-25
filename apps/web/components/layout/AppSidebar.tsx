@@ -83,6 +83,7 @@ const NAV_SECTIONS: NavSection[] = [
   {
     title: "SYSTEM",
     items: [
+      { name: "Profile & Identity", href: "/settings/profile", icon: Settings },
       { name: "Chrome Extension", href: "/extension", icon: Puzzle },
       { name: "Admin CRM", href: "/admin", icon: Building2, badge: "Admin" },
       { name: "Settings & Security", href: "/settings/security", icon: ShieldCheck },

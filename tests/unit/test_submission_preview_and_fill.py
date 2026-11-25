@@ -69,6 +69,8 @@ def test_open_and_fill_blocks_linkedin_and_prepares_official_portal():
     assert body["status"] == "AWAITING_USER_CLICK_SUBMIT"
     assert body["ats_detected"] == "Greenhouse"
     assert body["filled_count"] >= 5
+    assert body["resume_attached"] is True
+    assert str(body["resume_filename"]).endswith(".docx")
     app_id = body["application_id"]
 
     # 3. Confirm submitted updates snapshot & preview endpoint returns filled fields

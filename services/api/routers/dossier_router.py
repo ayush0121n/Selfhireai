@@ -199,10 +199,43 @@ def create_dossier_router(
 
     # ---------------- Startups Hiring (YC + HN) ---------------- #
     @router.get("/startups")
-    def list_startups(remote_only: bool = False, source: Optional[str] = None, q: Optional[str] = None):
+    def list_startups(remote_only: bool = False, source: Optional[str] = None, q: Optional[str] = None, live: bool = False):
         profile = get_profile_fn()
         candidate_skills = {s.lower() for s in (profile.skills if profile else [])}
         startups = store.list_startups()
+
+        if live:
+            try:
+                import httpx
+                resp = httpx.get(
+                    "https://hn.algolia.com/api/v1/search_by_date?tags=story&query=hiring&hitsPerPage=5",
+                    timeout=3.0,
+                )
+                if resp.status_code == 200:
+                    for hit in resp.json().get("hits", [])[:3]:
+                        title = hit.get("title") or ""
+                        obj_id = hit.get("objectID") or ""
+                        if title and obj_id:
+                            startups.insert(
+                                0,
+                                {
+                                    "id": f"hn-live-{obj_id}",
+                                    "company_name": hit.get("author") or "HN Startup",
+                                    "source": "HN Live Feed",
+                                    "batch": "Live",
+                                    "role_title": title[:80],
+                                    "location": "Remote",
+                                    "is_remote": True,
+                                    "stack": ["Python", "TypeScript", "React"],
+                                    "compensation": "Competitive",
+                                    "apply_email": "",
+                                    "apply_url": hit.get("url") or f"https://news.ycombinator.com/item?id={obj_id}",
+                                    "summary": title,
+                                    "posted_at": str(hit.get("created_at", ""))[:10],
+                                },
+                            )
+            except Exception:
+                pass
 
         results = []
         for st in startups:
