@@ -245,12 +245,17 @@ def sync_schema(db_path: str = DB_PATH):
         # 17. contacts
         """
         CREATE TABLE IF NOT EXISTS contacts (
-            id TEXT PRIMARY KEY,
-            user_id TEXT NOT NULL,
-            full_name TEXT NOT NULL,
-            company_name TEXT NOT NULL,
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT,
+            name TEXT,
+            full_name TEXT,
+            job_title TEXT,
             designation TEXT,
+            company TEXT,
+            company_name TEXT,
+            location TEXT,
             linkedin_url TEXT,
+            company_website TEXT,
             email_encrypted TEXT,
             consent_basis TEXT DEFAULT 'LEGITIMATE_INTEREST',
             created_at TEXT

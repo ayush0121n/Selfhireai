@@ -19,11 +19,16 @@ def seed_database(db_path: str = "data/selfhire.db") -> Dict[str, int]:
     cur.execute("""
         CREATE TABLE IF NOT EXISTS job_sources (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT,
             portal_name TEXT NOT NULL,
+            domain TEXT,
             category TEXT,
             website_url TEXT,
+            policy_url TEXT,
             description TEXT,
-            automation_mode TEXT DEFAULT 'MANUAL_LINK'
+            automation_mode TEXT DEFAULT 'MANUAL_LINK',
+            policy_status TEXT DEFAULT 'APPROVED',
+            created_at TEXT
         )
     """)
 
@@ -59,13 +64,15 @@ def seed_database(db_path: str = "data/selfhire.db") -> Dict[str, int]:
             reader = csv.DictReader(f)
             for r in reader:
                 cur.execute("""
-                    INSERT INTO job_sources (portal_name, category, website_url, description)
-                    VALUES (?, ?, ?, ?)
+                    INSERT INTO job_sources (name, portal_name, category, website_url, description, policy_status)
+                    VALUES (?, ?, ?, ?, ?, ?)
                 """, (
+                    r.get("Portal Name", ""),
                     r.get("Portal Name", ""),
                     r.get("Category", ""),
                     r.get("Website URL", ""),
-                    r.get("Description", "")
+                    r.get("Description", ""),
+                    "APPROVED"
                 ))
                 sources_count += 1
 

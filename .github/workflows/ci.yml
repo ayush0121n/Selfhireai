@@ -32,10 +32,10 @@ jobs:
       - name: Initialize SQLite Schema
         run: |
           mkdir -p data/uploads data/receipts
-          python scripts/verify_and_sync_schema.py
           python scripts/seed_database.py
           python scripts/seed_job_sources.py
           python scripts/seed_rich_multi_portal_jobs.py
+          python scripts/verify_and_sync_schema.py
 
       - name: Run Automated Pytest Suite
         run: |
