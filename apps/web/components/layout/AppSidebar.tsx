@@ -192,6 +192,7 @@ export function AppSidebar() {
             onClick={() => {
               localStorage.removeItem("selfhire_auth_role");
               localStorage.removeItem("selfhire_auth_email");
+              document.cookie = "selfhire_session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
               window.location.href = "/login";
             }}
             className="p-1.5 text-[#2D0E03]/60 hover:text-red-600 transition-colors"

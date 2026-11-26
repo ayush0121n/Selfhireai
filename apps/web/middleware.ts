@@ -32,19 +32,54 @@ export async function middleware(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const isAuthPage = request.nextUrl.pathname.startsWith("/login") || request.nextUrl.pathname.startsWith("/register");
-  const isProtectedPage = [
-    "/vault", "/jobs", "/resumes", "/approvals", "/dashboard", "/auto-apply",
-    "/career-insights", "/applications", "/matches", "/outreach", "/portals", "/settings"
-  ].some((path) => request.nextUrl.pathname.startsWith(path));
+  const sessionCookie = request.cookies.get("selfhire_session")?.value;
+  const isAuthenticated = Boolean(user || sessionCookie);
+
+  const pathname = request.nextUrl.pathname;
+  const isAuthPage = pathname.startsWith("/login") || pathname.startsWith("/register") || pathname.startsWith("/signup");
+  
+  const protectedPrefixes = [
+    "/vault",
+    "/jobs",
+    "/resumes",
+    "/resume",
+    "/approvals",
+    "/agent",
+    "/sources",
+    "/mcp",
+    "/audit",
+    "/account",
+    "/policy",
+    "/dashboard",
+    "/auto-apply",
+    "/career-insights",
+    "/applications",
+    "/matches",
+    "/outreach",
+    "/portals",
+    "/settings",
+    "/crm",
+    "/saved-jobs",
+    "/interviews",
+    "/skills",
+    "/onboarding",
+    "/admin",
+  ];
+
+  const isProtectedPage = protectedPrefixes.some((prefix) => pathname.startsWith(prefix));
 
   // If user is signed in and visits login/register, redirect to dashboard
-  if (user && isAuthPage) {
+  if (isAuthenticated && isAuthPage) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 
-  // Note: For local offline development or when Supabase keys are not authenticated,
-  // allow request through so user can test UI flows without hard network blocking.
+  // If unauthenticated user attempts to visit protected route, redirect to login
+  if (!isAuthenticated && isProtectedPage) {
+    const loginUrl = new URL("/login", request.url);
+    loginUrl.searchParams.set("redirect", pathname);
+    return NextResponse.redirect(loginUrl);
+  }
+
   return response;
 }
 

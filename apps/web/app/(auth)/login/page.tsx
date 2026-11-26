@@ -44,6 +44,7 @@ function LoginForm() {
   const handleQuickDemoSignIn = () => {
     localStorage.setItem("selfhire_auth_role", "candidate");
     localStorage.setItem("selfhire_auth_email", "alex.rivera@selfhire.ai");
+    document.cookie = "selfhire_session=demo_user; path=/; max-age=604800; SameSite=Lax";
     router.push(getTargetUrl("candidate"));
   };
 
@@ -71,6 +72,7 @@ function LoginForm() {
         ) {
           localStorage.setItem("selfhire_auth_role", "admin");
           localStorage.setItem("selfhire_auth_email", "admin@selfhireai.com");
+          document.cookie = "selfhire_session=admin; path=/; max-age=604800; SameSite=Lax";
           router.push(destination);
           return;
         }
@@ -82,6 +84,7 @@ function LoginForm() {
       if (data?.user) {
         localStorage.setItem("selfhire_auth_role", role);
         localStorage.setItem("selfhire_auth_email", data.user.email || email);
+        document.cookie = `selfhire_session=${encodeURIComponent(data.user.email || email)}; path=/; max-age=604800; SameSite=Lax`;
         router.push(destination);
       }
     } catch {

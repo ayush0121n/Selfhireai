@@ -53,6 +53,7 @@ export default function RegisterPage() {
         localStorage.setItem("selfhire_auth_role", "candidate");
         localStorage.setItem("selfhire_auth_email", data.user.email || email.trim());
         localStorage.setItem("selfhire_auth_name", fullName.trim());
+        document.cookie = `selfhire_session=${encodeURIComponent(data.user.email || email.trim())}; path=/; max-age=604800; SameSite=Lax`;
         setSuccessMsg("Account registered successfully! Redirecting...");
         setTimeout(() => {
           router.push("/vault");
@@ -63,6 +64,7 @@ export default function RegisterPage() {
       localStorage.setItem("selfhire_auth_role", "candidate");
       localStorage.setItem("selfhire_auth_email", email.trim() || "candidate@selfhire.ai");
       localStorage.setItem("selfhire_auth_name", fullName.trim() || "Candidate");
+      document.cookie = `selfhire_session=${encodeURIComponent(email.trim() || "candidate@selfhire.ai")}; path=/; max-age=604800; SameSite=Lax`;
       setSuccessMsg("Account initialized. Opening Evidence Vault...");
       setTimeout(() => {
         router.push("/vault");
