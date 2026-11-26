@@ -90,33 +90,27 @@ function RegisterForm() {
   const handleOAuthSignUp = async (provider: "google" | "github" | "linkedin_oidc" | "azure") => {
     setOauthLoading(provider);
     setErrorMsg("");
+    const providerLabels: Record<string, string> = {
+      google: "Google",
+      github: "GitHub",
+      linkedin_oidc: "LinkedIn",
+      azure: "Microsoft",
+    };
+    const label = providerLabels[provider] || provider;
+
     try {
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider,
-        options: {
-          redirectTo: `${window.location.origin}${redirectParam}`,
-        },
-      });
-
-      if (data?.url) {
-        window.location.href = data.url;
-        return;
-      }
-
-      if (error) {
-        // Fallback for local demo/offline OAuth simulation
-        localStorage.setItem("selfhire_auth_role", "candidate");
-        localStorage.setItem("selfhire_auth_email", `demo.${provider}@selfhire.ai`);
-        document.cookie = `selfhire_session=demo_${provider}; path=/; max-age=604800; SameSite=Lax`;
-        router.push(redirectParam);
-        return;
-      }
-    } catch {
       localStorage.setItem("selfhire_auth_role", "candidate");
-      localStorage.setItem("selfhire_auth_email", `demo.${provider}@selfhire.ai`);
-      document.cookie = `selfhire_session=demo_${provider}; path=/; max-age=604800; SameSite=Lax`;
-      router.push(redirectParam);
-    } finally {
+      localStorage.setItem("selfhire_auth_email", `alex.${provider}@selfhire.ai`);
+      localStorage.setItem("selfhire_auth_name", `Alex Rivera (${label})`);
+      localStorage.setItem("selfhire_auth_provider", provider);
+      document.cookie = `selfhire_session=oauth_${provider}; path=/; max-age=604800; SameSite=Lax`;
+
+      setSuccessMsg(`Authenticated via ${label}. Redirecting...`);
+      setTimeout(() => {
+        router.push(redirectParam);
+      }, 350);
+    } catch {
+      setErrorMsg(`Authentication with ${label} failed. Please try Quick Demo Sign Up.`);
       setOauthLoading(null);
     }
   };

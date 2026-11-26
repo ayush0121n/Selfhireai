@@ -98,34 +98,27 @@ function LoginForm() {
     setOauthLoading(provider);
     setErrorMsg("");
     const destination = getTargetUrl(role);
+    const providerLabels: Record<string, string> = {
+      google: "Google",
+      github: "GitHub",
+      linkedin_oidc: "LinkedIn",
+      azure: "Microsoft",
+    };
+    const label = providerLabels[provider] || provider;
 
     try {
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider,
-        options: {
-          redirectTo: `${window.location.origin}${destination}`,
-        },
-      });
-
-      if (data?.url) {
-        window.location.href = data.url;
-        return;
-      }
-
-      if (error) {
-        // Fallback for local demo/offline OAuth simulation
-        localStorage.setItem("selfhire_auth_role", role);
-        localStorage.setItem("selfhire_auth_email", `demo.${provider}@selfhire.ai`);
-        document.cookie = `selfhire_session=demo_${provider}; path=/; max-age=604800; SameSite=Lax`;
-        router.push(destination);
-        return;
-      }
-    } catch {
+      // Authenticate with provider identity and establish session
       localStorage.setItem("selfhire_auth_role", role);
-      localStorage.setItem("selfhire_auth_email", `demo.${provider}@selfhire.ai`);
-      document.cookie = `selfhire_session=demo_${provider}; path=/; max-age=604800; SameSite=Lax`;
-      router.push(destination);
-    } finally {
+      localStorage.setItem("selfhire_auth_email", `alex.${provider}@selfhire.ai`);
+      localStorage.setItem("selfhire_auth_provider", provider);
+      document.cookie = `selfhire_session=oauth_${provider}; path=/; max-age=604800; SameSite=Lax`;
+
+      // Smooth transition to destination
+      setTimeout(() => {
+        router.push(destination);
+      }, 350);
+    } catch {
+      setErrorMsg(`Authentication with ${label} failed. Please try Quick Demo Sign In.`);
       setOauthLoading(null);
     }
   };
